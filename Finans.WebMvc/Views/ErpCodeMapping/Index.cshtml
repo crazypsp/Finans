@@ -1,0 +1,48 @@
+@model IReadOnlyList<Finans.Contracts.ERP.ErpCodeMappingDto>
+
+<div class="page-header">
+    <h2><i class="bi bi-tags me-2"></i>ERP Kod Eşleme</h2>
+    <a href="/ErpCodeMapping/Create" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Yeni Eşleme</a>
+</div>
+
+@if (Model != null && Model.Count > 0)
+{
+    <div class="table-container">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr><th>ID</th><th>Banka</th><th>Döviz</th><th>B/A</th><th>Anahtar Kelime</th><th>Cari Kod</th><th>GL Kod</th><th>Banka Hesap</th><th>Öncelik</th><th>Aktif</th><th>İşlem</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var x in Model)
+                    {
+                        <tr>
+                            <td>@x.Id</td>
+                            <td>@x.BankId</td>
+                            <td>@x.Currency</td>
+                            <td>@x.DebitCredit</td>
+                            <td>@x.DescriptionKeyword</td>
+                            <td><code>@x.CurrentCode</code></td>
+                            <td><code>@x.GlCode</code></td>
+                            <td><code>@x.BankAccountCode</code></td>
+                            <td>@x.Priority</td>
+                            <td><span class="badge @(x.IsActive ? "bg-success" : "bg-danger")">@(x.IsActive ? "Aktif" : "Pasif")</span></td>
+                            <td>
+                                <form method="post" action="/ErpCodeMapping/Delete" style="display:inline;">
+                                    <input type="hidden" name="id" value="@x.Id" />
+                                    <button type="submit" class="btn btn-danger btn-sm btn-icon" title="Sil" onclick="return confirm('Silmek istediğinize emin misiniz?')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
+    <div class="empty-state"><i class="bi bi-tags"></i><p>ERP kod eşleme tanımı yok.</p></div>
+}

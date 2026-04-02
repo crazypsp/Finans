@@ -1,0 +1,249 @@
+@model Finans.Contracts.Transfer.TransferFilterDto
+@{
+    var list = ViewBag.List as IReadOnlyList<Finans.Contracts.Transfer.TransferListItemDto>;
+    var banks = ViewBag.Banks as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-arrow-left-right me-2"></i>Hesap Hareketleri</h2>
+    <span class="breadcrumb-nav"><a href="/Dashboard">Dashboard</a> / Hesap Hareketleri</span>
+</div>
+
+<!-- FİLTRE -->
+<div class="filter-bar">
+    <form method="post">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label">Banka</label>
+                <select asp-for="BankId" class="form-select form-select-sm">
+                    <option value="">Tümü</option>
+                    @foreach (var b in banks)
+                    {
+                        <option value="@b.Id">@b.BankName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Başlangıç</label>
+                <input asp-for="StartDate" type="date" class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Bitiş</label>
+                <input asp-for="EndDate" type="date" class="form-control form-control-sm" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Hesap No</label>
+                <input asp-for="AccountNumber" class="form-control form-control-sm" placeholder="Hesap No" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Açıklama Arama</label>
+                <input asp-for="DescriptionContains" class="form-control form-control-sm" placeholder="Arama..." />
+            </div>
+            <div class="col-md-2 d-flex align-items-end gap-2">
+                <div class="form-check">
+                    <input asp-for="OnlyNotTransferred" type="checkbox" class="form-check-input" id="onlyNT" />
+                    <label class="form-check-label" for="onlyNT" style="font-size:.8rem;">Aktarılmayanlar</label>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Listele</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- SONUÇ -->
+@if (list != null && list.Count > 0)
+{
+    <form method="post" action="/Transfer/CreateBatch" id="batchForm">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <span class="text-muted" style="font-size:.875rem;">@list.Count kayıt bulundu</span>
+                <span id="selectionCount" class="ms-2 badge bg-info" style="display:none;"></span>
+            </div>
+            <button type="submit" class="btn btn-success btn-sm" onclick="return confirmBatch()">
+                <i class="bi bi-send me-1"></i>Seçilenleri Kuyruğa Gönder
+            </button>
+        </div>
+
+        <div class="table-container">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;"><input type="checkbox" id="checkAll" class="form-check-input" /></th>
+                            <th>ID</th>
+                            <th>Banka</th>
+                            <th>Hesap No</th>
+                            <th>Tarih</th>
+                            <th>Açıklama</th>
+                            <th class="text-end">Tutar</th>
+                            <th>Döviz</th>
+                            <th>B/A</th>
+                            <th>Eşleşme</th>
+                            <th>Durum</th>
+                            <th style="width:80px;">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var x in list)
+                        {
+                            <tr>
+                                <td>
+                                    @if (!x.IsTransferred && string.IsNullOrWhiteSpace(x.TransferBatchNo))
+                                    {
+                                        <input type="checkbox" name="selectedIds" value="@x.BankTransactionId" class="form-check-input rowCheck" />
+                                    }
+                                </td>
+                                <td>@x.BankTransactionId</td>
+                                <td>@x.BankName</td>
+                                <td><code>@x.AccountNumber</code></td>
+                                <td>@x.TransactionDate.ToString("dd.MM.yyyy")</td>
+                                <td>
+                                    <span class="text-truncate-40" title="@x.Description">@x.Description</span>
+                                </td>
+                                <td class="text-end fw-bold @(x.DebitCredit == "C" ? "text-success" : "text-danger")">
+                                    @x.Amount.ToString("N2")
+                                </td>
+                                <td>@x.Currency</td>
+                                <td>
+                                    <span class="badge @(x.DebitCredit == "C" ? "bg-success" : "bg-danger")">
+                                        @(x.DebitCredit == "C" ? "Alacak" : "Borç")
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (x.IsMatched)
+                                    {
+                                        <span class="badge bg-success" title="@x.MatchedCurrentCode">@(x.MatchedCurrentName ?? x.MatchedCurrentCode ?? "Eşleşti")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Eşleşmedi</span>
+                                    }
+                                </td>
+                                <td>
+                                    @switch (x.TransferStatus)
+                                    {
+                                        case "Transferred":
+                                            <span class="badge bg-success">Aktarıldı</span>
+                                            break;
+                                        case "Pending":
+                                            <span class="badge bg-warning">Bekliyor</span>
+                                            break;
+                                        default:
+                                            <span class="badge bg-secondary">Yeni</span>
+                                            break;
+                                    }
+                                </td>
+                                <td>
+                                    @if (!x.IsTransferred && string.IsNullOrWhiteSpace(x.TransferBatchNo))
+                                    {
+                                        <button type="button" class="btn btn-primary btn-sm btn-icon"
+                                                title="ERP'ye Aktar"
+                                                onclick="openTransferModal(@x.BankTransactionId, '@x.Description?.Replace("'", "\\'")?.Replace("\r","")?.Replace("\n","")', @x.Amount, '@x.Currency')">
+                                            <i class="bi bi-box-arrow-right"></i>
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </form>
+}
+else if (list != null)
+{
+    <div class="empty-state">
+        <i class="bi bi-inbox"></i>
+        <p>Filtrelere uygun kayıt bulunamadı.</p>
+    </div>
+}
+
+<!-- TRANSFER MODAL -->
+<div class="modal fade" id="transferModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-box-arrow-right me-2"></i>ERP Aktarım</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="/Transfer/TransferSingle">
+                <div class="modal-body">
+                    <input type="hidden" name="bankTransactionId" id="modalTxId" />
+                    <div class="mb-3 p-3" style="background:#f8f9fa;border-radius:8px;">
+                        <small class="text-muted">İşlem Bilgisi</small>
+                        <p id="modalTxDesc" class="mb-0 fw-bold" style="font-size:.9rem;"></p>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Muhasebe Kodu (GL)</label>
+                        <select name="glCode" id="modalGlSelect" class="form-select" required>
+                            <option value="">Yükleniyor...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cari Hesap <span class="text-muted">(Opsiyonel)</span></label>
+                        <select name="currentCode" id="modalCurrentSelect" class="form-select">
+                            <option value="">Seçiniz</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Banka Hesap Kodu</label>
+                        <select name="bankAccountCode" id="modalBankSelect" class="form-select" required>
+                            <option value="">Seçiniz</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-primary btn-sm" data-bs-dismiss="modal">İptal</button>
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-send me-1"></i>Aktar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    initCheckAll('checkAll', 'rowCheck');
+
+    function confirmBatch() {
+        var checked = document.querySelectorAll('.rowCheck:checked').length;
+        if (checked === 0) { alert('En az bir kayıt seçin.'); return false; }
+        return confirm(checked + ' kayıt kuyruğa gönderilecek. Onaylıyor musunuz?');
+    }
+
+    var erpAccountsLoaded = false, erpAccounts = null;
+
+    async function openTransferModal(txId, desc, amount, currency) {
+        document.getElementById('modalTxId').value = txId;
+        document.getElementById('modalTxDesc').textContent =
+            desc + ' — ' + parseFloat(amount).toLocaleString('tr-TR', { minimumFractionDigits: 2 }) + ' ' + currency;
+        var modal = new bootstrap.Modal(document.getElementById('transferModal'));
+        modal.show();
+        if (!erpAccountsLoaded) {
+            try {
+                var res = await fetch('/Transfer/GetErpAccounts');
+                erpAccounts = await res.json();
+                erpAccountsLoaded = true;
+            } catch (e) {
+                alert('ERP hesapları yüklenemedi: ' + e.message);
+                return;
+            }
+        }
+        fillSelect('modalGlSelect', erpAccounts.glAccounts, 'glCode', 'glName', 'GL Kodu Seçin');
+        fillSelect('modalCurrentSelect', erpAccounts.currentAccounts, 'currentCode', 'currentName', 'Seçiniz (opsiyonel)', true);
+        fillSelect('modalBankSelect', erpAccounts.bankAccounts, 'bankAccCode', 'bankAccName', 'Banka Hesabı Seçin');
+    }
+
+    function fillSelect(id, items, valField, textField, placeholder, optional) {
+        var sel = document.getElementById(id);
+        sel.innerHTML = '';
+        sel.add(new Option('-- ' + placeholder + ' --', ''));
+        if (items) {
+            items.forEach(function (item) {
+                sel.add(new Option(item[valField] + ' - ' + item[textField], item[valField]));
+            });
+        }
+    }
+</script>
+}

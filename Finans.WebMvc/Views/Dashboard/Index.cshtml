@@ -1,0 +1,222 @@
+@model Finans.Contracts.Dashboard.DashboardSummaryDto
+@using Finans.Contracts.Reports
+@{
+    var health = ViewBag.Health as SystemHealthSummaryDto;
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+    <span class="breadcrumb-nav">Ana Sayfa</span>
+</div>
+
+<!-- STAT CARDS -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon bg-primary"><i class="bi bi-arrow-left-right"></i></div>
+            <div class="stat-value">@Model.TotalTransactions.ToString("N0")</div>
+            <div class="stat-label">Toplam İşlem</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon bg-warning"><i class="bi bi-hourglass-split"></i></div>
+            <div class="stat-value">@Model.NotTransferredCount.ToString("N0")</div>
+            <div class="stat-label">Aktarılmamış</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon bg-success"><i class="bi bi-check-circle"></i></div>
+            <div class="stat-value">@Model.TransferredCount.ToString("N0")</div>
+            <div class="stat-label">Aktarılmış</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon bg-info"><i class="bi bi-cash-stack"></i></div>
+            <div class="stat-value">@Model.TotalAmountInRange.ToString("N2")</div>
+            <div class="stat-label">Toplam Tutar (₺)</div>
+        </div>
+    </div>
+</div>
+
+<!-- CHARTS ROW -->
+<div class="row g-3 mb-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="bi bi-graph-up me-2"></i>Aktarım Durumu</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="transferChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="bi bi-pie-chart me-2"></i>İşlem Dağılımı</h6>
+            </div>
+            <div class="card-body">
+                <div class="chart-container">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SYSTEM HEALTH + LAST ACTIVITY -->
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="bi bi-heart-pulse me-2"></i>Sistem Sağlığı</h6>
+            </div>
+            <div class="card-body">
+                @if (health != null)
+                {
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            <tr>
+                                <td style="border:none;"><span class="health-dot @(health.HasActiveConnector ? "green" : "red")"></span> Desktop Connector</td>
+                                <td style="border:none;" class="text-end">
+                                    <span class="badge @(health.HasActiveConnector ? "bg-success" : "bg-danger")">
+                                        @(health.HasActiveConnector ? "Aktif" : "Pasif")
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><span class="health-dot @(health.HasActiveBankCredential ? "green" : "red")"></span> Banka Credential</td>
+                                <td class="text-end">
+                                    <span class="badge @(health.HasActiveBankCredential ? "bg-success" : "bg-danger")">
+                                        @(health.HasActiveBankCredential ? "Aktif" : "Tanımsız")
+                                    </span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td><span class="health-dot @(health.FailedTransferCount == 0 ? "green" : "red")"></span> Başarısız Aktarım</td>
+                                <td class="text-end"><strong>@health.FailedTransferCount</strong></td>
+                            </tr>
+                            <tr>
+                                <td><span class="health-dot @(health.PendingTransferCount == 0 ? "green" : "orange")"></span> Bekleyen Aktarım</td>
+                                <td class="text-end"><strong>@health.PendingTransferCount</strong></td>
+                            </tr>
+                            <tr>
+                                <td><i class="bi bi-clock me-1"></i> Son Heartbeat</td>
+                                <td class="text-end text-muted">@(health.LastHeartbeatAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                            </tr>
+                            <tr>
+                                <td><i class="bi bi-cloud-download me-1"></i> Son Banka Import</td>
+                                <td class="text-end text-muted">@(health.LastBankImportAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                            </tr>
+                            <tr>
+                                <td><i class="bi bi-box-arrow-right me-1"></i> Son ERP Aktarım</td>
+                                <td class="text-end text-muted">@(health.LastErpTransferAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="empty-state">
+                        <i class="bi bi-heart-pulse"></i>
+                        <p>Sistem sağlık verisi henüz yok</p>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="bi bi-info-circle me-2"></i>Hızlı Bilgiler</h6>
+            </div>
+            <div class="card-body">
+                <div class="activity-item">
+                    <div class="activity-dot blue"></div>
+                    <div>
+                        <div class="activity-text">Son import tarihi</div>
+                        <div class="activity-time">@(Model.LastImportAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "Henüz import yok")</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-dot @(Model.FailedImportCountLast24h == 0 ? "green" : "red")"></div>
+                    <div>
+                        <div class="activity-text">Son 24 saatte başarısız import</div>
+                        <div class="activity-time">@Model.FailedImportCountLast24h adet</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-dot green"></div>
+                    <div>
+                        <div class="activity-text">Aktarım oranı</div>
+                        <div class="activity-time">
+                            @{
+                                var rate = Model.TotalTransactions > 0 ? (double)Model.TransferredCount / Model.TotalTransactions * 100 : 0;
+                            }
+                            %@rate.ToString("F1") tamamlandı
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script>
+        // Transfer Durumu Bar Chart
+        new Chart(document.getElementById('transferChart'), {
+            type: 'bar',
+            data: {
+                labels: ['Toplam İşlem', 'Aktarılmamış', 'Aktarılmış'],
+                datasets: [{
+                    label: 'Adet',
+                    data: [@Model.TotalTransactions, @Model.NotTransferredCount, @Model.TransferredCount],
+                    backgroundColor: ['#1a73e8', '#e37400', '#0d904f'],
+                    borderRadius: 6,
+                    borderSkipped: false,
+                    barThickness: 48
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: { beginAtZero: true, grid: { color: '#f0f0f0' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+
+        // Pie Chart
+        new Chart(document.getElementById('pieChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Aktarılmış', 'Aktarılmamış'],
+                datasets: [{
+                    data: [@Model.TransferredCount, @Model.NotTransferredCount],
+                    backgroundColor: ['#0d904f', '#e37400'],
+                    borderWidth: 0,
+                    hoverOffset: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true } }
+                }
+            }
+        });
+    </script>
+}

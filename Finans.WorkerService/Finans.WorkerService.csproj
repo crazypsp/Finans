@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-Finans.WorkerService-790e8d46-4ced-43a0-a0a1-15e90fbb71a4</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.24" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
+    <PackageReference Include="Polly" Version="8.6.5" />
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Finans.Application\Finans.Application.csproj" />
+    <ProjectReference Include="..\Finans.Contracts\Finans.Contracts.csproj" />
+    <ProjectReference Include="..\Finans.Data\Finans.Data.csproj" />
+    <ProjectReference Include="..\Finans.Entities\Finans.Entities.csproj" />
+    <ProjectReference Include="..\Finans.Infrastructure\Finans.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

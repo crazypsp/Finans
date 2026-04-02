@@ -1,0 +1,76 @@
+@model IReadOnlyList<Finans.Contracts.Transfer.ErpTransferBatchListDto>
+
+<div class="page-header">
+    <h2><i class="bi bi-list-check me-2"></i>ERP Aktarım Kuyrukları</h2>
+    <span class="breadcrumb-nav"><a href="/Dashboard">Dashboard</a> / Aktarım Kuyrukları</span>
+</div>
+
+@if (Model != null && Model.Count > 0)
+{
+    <div class="table-container">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Batch No</th>
+                        <th>Durum</th>
+                        <th class="text-end">Toplam</th>
+                        <th class="text-end">Başarılı</th>
+                        <th class="text-end">Başarısız</th>
+                        <th>Başlangıç</th>
+                        <th>Bitiş</th>
+                        <th>İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var x in Model)
+                    {
+                        <tr>
+                            <td><code>@x.BatchNo</code></td>
+                            <td>
+                                @switch (x.Status)
+                                {
+                                    case "Success":
+                                        <span class="badge bg-success">Başarılı</span>
+                                        break;
+                                    case "Failed":
+                                        <span class="badge bg-danger">Başarısız</span>
+                                        break;
+                                    case "Pending":
+                                        <span class="badge bg-warning">Bekliyor</span>
+                                        break;
+                                    default:
+                                        <span class="badge bg-secondary">@x.Status</span>
+                                        break;
+                                }
+                            </td>
+                            <td class="text-end">@x.TotalCount</td>
+                            <td class="text-end text-success fw-bold">@x.SuccessCount</td>
+                            <td class="text-end text-danger fw-bold">@x.FailedCount</td>
+                            <td>@x.StartedAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                            <td>@(x.CompletedAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                            <td>
+                                @if (x.Status == "Failed" || x.FailedCount > 0)
+                                {
+                                    <form method="post" action="/ErpTransfer/RetryItem" style="display:inline;">
+                                        <input type="hidden" name="id" value="@x.Id" />
+                                        <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('Tekrar denensin mi?')">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </button>
+                                    </form>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
+    <div class="empty-state">
+        <i class="bi bi-list-check"></i>
+        <p>Henüz aktarım kuyruğu oluşturulmamış.</p>
+    </div>
+}

@@ -1,0 +1,64 @@
+@model IReadOnlyList<Finans.Entities.Banking.BankAccount>
+
+<div class="page-header">
+    <h2><i class="bi bi-credit-card me-2"></i>Banka Hesapları</h2>
+    <a href="/BankManagement/Banks" class="btn btn-outline-primary btn-sm"><i class="bi bi-arrow-left me-1"></i>Bankalar</a>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header"><h6><i class="bi bi-plus-lg me-2"></i>Yeni Hesap Ekle</h6></div>
+    <div class="card-body">
+        <form method="post" action="/BankManagement/CreateAccount">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label">Banka ID</label>
+                    <input name="BankId" type="number" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Hesap No</label>
+                    <input name="AccountNumber" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">IBAN</label>
+                    <input name="Iban" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">Şube</label>
+                    <input name="BranchNo" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Müşteri No</label>
+                    <input name="CustomerNo" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">Döviz</label>
+                    <input name="Currency" class="form-control form-control-sm" value="TRY" />
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus me-1"></i>Ekle</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@if (Model != null && Model.Count > 0)
+{
+    <div class="table-container">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead><tr><th>ID</th><th>Banka ID</th><th>Hesap No</th><th>IBAN</th><th>Şube</th><th>Müşteri No</th><th>Döviz</th><th>Aktif</th></tr></thead>
+                <tbody>
+                    @foreach (var a in Model)
+                    {
+                        <tr>
+                            <td>@a.Id</td><td>@a.BankId</td><td><code>@a.AccountNumber</code></td><td>@a.Iban</td>
+                            <td>@a.BranchNo</td><td>@a.CustomerNo</td><td>@a.Currency</td>
+                            <td><span class="badge @(a.IsActive ? "bg-success" : "bg-danger")">@(a.IsActive ? "Aktif" : "Pasif")</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

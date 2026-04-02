@@ -1,0 +1,51 @@
+@model Finans.Application.Dtos.Auth.LoginRequest
+@{
+    Layout = "~/Views/Shared/_LoginLayout.cshtml";
+}
+
+<div class="login-wrapper">
+    <div class="login-card">
+        <div class="login-logo">
+            <i class="bi bi-cash-stack"></i>
+            <h3>Finans Yönetim Sistemi</h3>
+            <p>Hesabınıza giriş yapın</p>
+        </div>
+
+        @if (ViewData.ModelState.ErrorCount > 0)
+        {
+            <div class="alert alert-danger" style="font-size:.875rem;">
+                <i class="bi bi-exclamation-triangle"></i>
+                @foreach (var err in ViewData.ModelState.Values.SelectMany(v => v.Errors))
+                {
+                    <span>@err.ErrorMessage</span>
+                }
+            </div>
+        }
+
+        <form method="post">
+            <div class="form-group">
+                <label class="form-label">Kullanıcı Adı / E-posta</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                    <input asp-for="UserNameOrEmail" class="form-control" placeholder="admin" autofocus />
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top:16px;">
+                <label class="form-label">Şifre</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-lock"></i></span>
+                    <input asp-for="Password" type="password" class="form-control" placeholder="••••••••" />
+                </div>
+            </div>
+
+            <button type="submit" class="btn-login" style="margin-top:24px;">
+                <i class="bi bi-box-arrow-in-right"></i> Giriş Yap
+            </button>
+        </form>
+
+        <div style="text-align:center;margin-top:20px;font-size:.75rem;color:#80868b;">
+            Demo Kullanıcılar: admin / Admin123! &bull; muhasebe / Muhasebe123!
+        </div>
+    </div>
+</div>

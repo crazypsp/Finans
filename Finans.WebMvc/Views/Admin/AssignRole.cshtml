@@ -1,0 +1,38 @@
+@model Finans.Application.Dtos.Identity.AssignRoleRequest
+@{
+    var roles = ViewBag.Roles as IReadOnlyList<Finans.Application.Dtos.Identity.RoleListItem>;
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-shield-check me-2"></i>Rol Atama</h2>
+    <span class="breadcrumb-nav"><a href="/Admin/Users">Kullanıcılar</a> / Rol Atama</span>
+</div>
+
+<div class="card" style="max-width:500px;">
+    <div class="card-body">
+        <form method="post">
+            <div asp-validation-summary="All" class="alert alert-danger" style="display:@(ViewData.ModelState.ErrorCount > 0 ? "block" : "none");"></div>
+            <input asp-for="UserId" type="hidden" />
+            <div class="mb-3">
+                <p>Kullanıcı ID: <strong>@Model.UserId</strong></p>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Rol</label>
+                <select asp-for="RoleId" class="form-select" required>
+                    <option value="">-- Rol Seçin --</option>
+                    @if (roles != null)
+                    {
+                        @foreach (var r in roles)
+                        {
+                            <option value="@r.Id">@r.Name (@r.Code)</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check me-1"></i>Ata</button>
+                <a href="/Admin/Users" class="btn btn-outline-primary">İptal</a>
+            </div>
+        </form>
+    </div>
+</div>

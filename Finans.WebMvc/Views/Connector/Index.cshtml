@@ -1,0 +1,44 @@
+@model IReadOnlyList<Finans.Contracts.Integration.DesktopConnectorClientDto>
+
+<div class="page-header">
+    <h2><i class="bi bi-plug me-2"></i>Desktop Connector</h2>
+    <span class="breadcrumb-nav"><a href="/Dashboard">Dashboard</a> / Connector</span>
+</div>
+
+@if (Model != null && Model.Count > 0)
+{
+    <div class="row g-3">
+        @foreach (var c in Model)
+        {
+            <div class="col-lg-6 col-xl-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h6><i class="bi bi-pc-display me-2"></i>@c.MachineName</h6>
+                        <span class="badge @(c.IsActive ? "bg-success" : "bg-danger")">@(c.IsActive ? "Aktif" : "Pasif")</span>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0" style="font-size:.85rem;">
+                            <tr><td class="text-muted">Connector Key</td><td><code>@c.ConnectorKey</code></td></tr>
+                            <tr><td class="text-muted">Versiyon</td><td>@c.Version</td></tr>
+                            <tr><td class="text-muted">Lisanslı</td><td><span class="badge @(c.IsLicensed ? "bg-success" : "bg-danger")">@(c.IsLicensed ? "Evet" : "Hayır")</span></td></tr>
+                            <tr><td class="text-muted">Son Heartbeat</td><td>@(c.LastHeartbeatAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td></tr>
+                            <tr><td class="text-muted">Son Transfer</td><td>@(c.LastTransferAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td></tr>
+                            <tr><td class="text-muted">Son Durum</td><td>@c.LastStatus</td></tr>
+                            @if (!string.IsNullOrEmpty(c.LastError))
+                            {
+                                <tr><td class="text-muted">Son Hata</td><td class="text-danger" style="font-size:.8rem;">@c.LastError</td></tr>
+                            }
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <div class="empty-state">
+        <i class="bi bi-plug"></i>
+        <p>Kayıtlı Desktop Connector bulunamadı.</p>
+    </div>
+}

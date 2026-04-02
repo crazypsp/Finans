@@ -1,0 +1,77 @@
+@model IReadOnlyList<Finans.Entities.Banking.Bank>
+
+<div class="page-header">
+    <h2><i class="bi bi-building me-2"></i>Banka Tanımları</h2>
+    <div>
+        <a href="/BankManagement/Accounts" class="btn btn-outline-primary btn-sm me-1"><i class="bi bi-credit-card me-1"></i>Hesaplar</a>
+        <a href="/BankManagement/Credentials" class="btn btn-outline-primary btn-sm"><i class="bi bi-key me-1"></i>Credential</a>
+    </div>
+</div>
+
+<!-- Yeni Banka Ekleme -->
+<div class="card mb-4">
+    <div class="card-header"><h6><i class="bi bi-plus-lg me-2"></i>Yeni Banka Ekle</h6></div>
+    <div class="card-body">
+        <form method="post" action="/BankManagement/CreateBank">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label">Banka Adı</label>
+                    <input name="BankName" class="form-control form-control-sm" required />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Provider Kodu</label>
+                    <input name="ProviderCode" class="form-control form-control-sm" placeholder="AKB, ISB..." required />
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">External ID</label>
+                    <input name="ExternalBankId" type="number" class="form-control form-control-sm" value="0" />
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">Link Gerekli</label>
+                    <select name="RequiresLink" class="form-select form-select-sm">
+                        <option value="false">Hayır</option>
+                        <option value="true">Evet</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Varsayılan Link</label>
+                    <input name="DefaultLink" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Varsayılan TLink</label>
+                    <input name="DefaultTLink" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus me-1"></i>Ekle</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@if (Model != null && Model.Count > 0)
+{
+    <div class="table-container">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr><th>ID</th><th>Banka Adı</th><th>Provider Kodu</th><th>External ID</th><th>Link Gerekli</th><th>Varsayılan Link</th><th>Aktif</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var b in Model)
+                    {
+                        <tr>
+                            <td>@b.Id</td>
+                            <td><strong>@b.BankName</strong></td>
+                            <td><code>@b.ProviderCode</code></td>
+                            <td>@b.ExternalBankId</td>
+                            <td>@(b.RequiresLink ? "Evet" : "Hayır")</td>
+                            <td style="font-size:.8rem;">@b.DefaultLink</td>
+                            <td><span class="badge @(b.IsActive ? "bg-success" : "bg-danger")">@(b.IsActive ? "Aktif" : "Pasif")</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

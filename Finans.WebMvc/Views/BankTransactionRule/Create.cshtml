@@ -1,0 +1,73 @@
+@model Finans.Contracts.ERP.BankTransactionRuleDto
+
+<div class="page-header">
+    <h2><i class="bi bi-funnel me-2"></i>Yeni Kural</h2>
+    <span class="breadcrumb-nav"><a href="/BankTransactionRule">Kurallar</a> / Yeni</span>
+</div>
+
+<div class="card" style="max-width:800px;">
+    <div class="card-body">
+        <form method="post">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Banka ID</label>
+                    <input asp-for="BankId" type="number" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Hesap No</label>
+                    <input asp-for="AccountNumber" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Döviz</label>
+                    <input asp-for="Currency" class="form-control" placeholder="TRY" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Borç/Alacak</label>
+                    <select asp-for="DebitCredit" class="form-select">
+                        <option value="">Tümü</option>
+                        <option value="D">Borç (D)</option>
+                        <option value="C">Alacak (C)</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Min Tutar</label>
+                    <input asp-for="MinAmount" type="number" step="0.01" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Max Tutar</label>
+                    <input asp-for="MaxAmount" type="number" step="0.01" class="form-control" />
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label">Açıklama İçerir</label>
+                    <input asp-for="DescriptionContains" class="form-control" placeholder="EFT, HAVALE..." />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Cari Kod</label>
+                    <input asp-for="CurrentCode" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">GL Kod</label>
+                    <input asp-for="GlCode" class="form-control" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Banka Hesap Kodu</label>
+                    <input asp-for="BankAccountCode" class="form-control" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Öncelik</label>
+                    <input asp-for="Priority" type="number" class="form-control" />
+                </div>
+                <div class="col-md-6 d-flex align-items-end">
+                    <div class="form-check">
+                        <input asp-for="IsActive" type="checkbox" class="form-check-input" checked />
+                        <label class="form-check-label">Aktif</label>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check me-1"></i>Kaydet</button>
+                <a href="/BankTransactionRule" class="btn btn-outline-primary">İptal</a>
+            </div>
+        </form>
+    </div>
+</div>

@@ -1,0 +1,225 @@
+@using Finans.Contracts.Reports
+@{
+    var summary = ViewBag.Summary as Finans.Contracts.Reports.DashboardSummaryDto;
+    var bankImportRows = ViewBag.BankImportRows as IReadOnlyList<BankImportReportRowDto>;
+    var erpTransferRows = ViewBag.ErpTransferRows as IReadOnlyList<ErpTransferReportRowDto>;
+    var connectorRows = ViewBag.ConnectorRows as IReadOnlyList<ConnectorReportRowDto>;
+    var bankFilter = ViewBag.BankFilter as BankImportReportFilterDto ?? new BankImportReportFilterDto();
+    var erpFilter = ViewBag.ErpFilter as ErpTransferReportFilterDto ?? new ErpTransferReportFilterDto();
+    var connectorFilter = ViewBag.ConnectorFilter as ConnectorReportFilterDto ?? new ConnectorReportFilterDto();
+}
+
+<div class="page-header">
+    <h2><i class="bi bi-bar-chart me-2"></i>Raporlar</h2>
+    <span class="breadcrumb-nav"><a href="/Dashboard">Dashboard</a> / Raporlar</span>
+</div>
+
+<!-- ÖZET KARTLARI -->
+@if (summary != null)
+{
+    <div class="row g-3 mb-4">
+        <div class="col-xl-2 col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon bg-primary"><i class="bi bi-arrow-left-right"></i></div>
+                <div class="stat-value">@summary.TotalBankTransactionCount</div>
+                <div class="stat-label">Toplam İşlem</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon bg-warning"><i class="bi bi-hourglass"></i></div>
+                <div class="stat-value">@summary.PendingTransferCount</div>
+                <div class="stat-label">Bekleyen</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon bg-success"><i class="bi bi-check2-all"></i></div>
+                <div class="stat-value">@summary.SuccessTransferCount</div>
+                <div class="stat-label">Başarılı</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon bg-danger"><i class="bi bi-x-circle"></i></div>
+                <div class="stat-value">@summary.FailedTransferCount</div>
+                <div class="stat-label">Başarısız</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon bg-info"><i class="bi bi-plug"></i></div>
+                <div class="stat-value">@summary.ActiveConnectorCount</div>
+                <div class="stat-label">Aktif Connector</div>
+            </div>
+        </div>
+        <div class="col-xl-2 col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon bg-primary"><i class="bi bi-bank"></i></div>
+                <div class="stat-value">@summary.ActiveBankCount</div>
+                <div class="stat-label">Aktif Banka</div>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- FİLTRELER -->
+<form method="post">
+    <div class="row g-3 mb-4">
+        <!-- Banka Import Filtreleri -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header"><h6><i class="bi bi-cloud-download me-2"></i>Banka Import Filtreleri</h6></div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label">Banka ID</label>
+                        <input name="bankFilter.BankId" value="@bankFilter.BankId" class="form-control form-control-sm" />
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label">Başlangıç</label>
+                            <input name="bankFilter.StartDate" type="date" value="@(bankFilter.StartDate?.ToString("yyyy-MM-dd"))" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Bitiş</label>
+                            <input name="bankFilter.EndDate" type="date" value="@(bankFilter.EndDate?.ToString("yyyy-MM-dd"))" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- ERP Transfer Filtreleri -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header"><h6><i class="bi bi-box-arrow-right me-2"></i>ERP Transfer Filtreleri</h6></div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label">Batch No</label>
+                        <input name="erpFilter.BatchNo" value="@erpFilter.BatchNo" class="form-control form-control-sm" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Durum</label>
+                        <select name="erpFilter.Status" class="form-select form-select-sm">
+                            <option value="">Tümü</option>
+                            <option value="Pending" selected="@(erpFilter.Status == "Pending")">Bekliyor</option>
+                            <option value="Success" selected="@(erpFilter.Status == "Success")">Başarılı</option>
+                            <option value="Failed" selected="@(erpFilter.Status == "Failed")">Başarısız</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Connector Filtreleri -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header"><h6><i class="bi bi-plug me-2"></i>Connector Filtreleri</h6></div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="form-label">Makine Adı</label>
+                        <input name="connectorFilter.MachineName" value="@connectorFilter.MachineName" class="form-control form-control-sm" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Versiyon</label>
+                        <input name="connectorFilter.Version" value="@connectorFilter.Version" class="form-control form-control-sm" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="mb-4">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-funnel me-1"></i>Filtrele</button>
+    </div>
+</form>
+
+<!-- BANKA IMPORT RAPORU -->
+<div class="card mb-4">
+    <div class="card-header"><h6><i class="bi bi-cloud-download me-2"></i>Banka Import Raporu</h6></div>
+    <div class="card-body p-0">
+        @if (bankImportRows != null && bankImportRows.Count > 0)
+        {
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>Banka</th><th>Tarih</th><th>Durum</th><th>İşlem</th><th>Hata</th></tr></thead>
+                    <tbody>
+                        @foreach (var x in bankImportRows)
+                        {
+                            <tr>
+                                <td>@x.BankName</td>
+                                <td>@x.ExecutedAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                                <td><span class="badge @(x.IsSuccess ? "bg-success" : "bg-danger")">@(x.IsSuccess ? "Başarılı" : "Başarısız")</span></td>
+                                <td>@x.Operation</td>
+                                <td style="font-size:.8rem;" class="text-danger">@x.ErrorMessage</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="empty-state"><i class="bi bi-inbox"></i><p>Veri yok</p></div>
+        }
+    </div>
+</div>
+
+<!-- ERP TRANSFER RAPORU -->
+<div class="card mb-4">
+    <div class="card-header"><h6><i class="bi bi-box-arrow-right me-2"></i>ERP Transfer Raporu</h6></div>
+    <div class="card-body p-0">
+        @if (erpTransferRows != null && erpTransferRows.Count > 0)
+        {
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>Batch No</th><th>Durum</th><th>Toplam</th><th>Başarılı</th><th>Başarısız</th><th>Başlangıç</th><th>Bitiş</th></tr></thead>
+                    <tbody>
+                        @foreach (var x in erpTransferRows)
+                        {
+                            <tr>
+                                <td><code>@x.BatchNo</code></td>
+                                <td>
+                                    <span class="badge @(x.Status == "Success" ? "bg-success" : x.Status == "Failed" ? "bg-danger" : "bg-warning")">@x.Status</span>
+                                </td>
+                                <td>@x.TotalCount</td>
+                                <td class="text-success fw-bold">@x.SuccessCount</td>
+                                <td class="text-danger fw-bold">@x.FailedCount</td>
+                                <td>@x.StartedAtUtc.ToString("dd.MM.yyyy HH:mm")</td>
+                                <td>@(x.CompletedAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else { <div class="empty-state"><i class="bi bi-inbox"></i><p>Veri yok</p></div> }
+    </div>
+</div>
+
+<!-- CONNECTOR RAPORU -->
+<div class="card">
+    <div class="card-header"><h6><i class="bi bi-plug me-2"></i>Connector Raporu</h6></div>
+    <div class="card-body p-0">
+        @if (connectorRows != null && connectorRows.Count > 0)
+        {
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>Makine</th><th>Versiyon</th><th>Aktif</th><th>Lisanslı</th><th>Son Heartbeat</th><th>Son Transfer</th><th>Durum</th></tr></thead>
+                    <tbody>
+                        @foreach (var x in connectorRows)
+                        {
+                            <tr>
+                                <td>@x.MachineName</td>
+                                <td>@x.Version</td>
+                                <td><span class="badge @(x.IsActive ? "bg-success" : "bg-danger")">@(x.IsActive ? "Evet" : "Hayır")</span></td>
+                                <td><span class="badge @(x.IsLicensed ? "bg-success" : "bg-danger")">@(x.IsLicensed ? "Evet" : "Hayır")</span></td>
+                                <td>@(x.LastHeartbeatAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                                <td>@(x.LastTransferAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                                <td>@x.LastStatus</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else { <div class="empty-state"><i class="bi bi-inbox"></i><p>Veri yok</p></div> }
+    </div>
+</div>
