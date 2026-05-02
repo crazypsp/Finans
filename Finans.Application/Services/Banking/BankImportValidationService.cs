@@ -45,10 +45,12 @@ namespace Finans.Application.Services.Banking
             if (!credential.IsActive || credential.IsDeleted)
                 errors.Add("Credential aktif değil.");
 
-            if (string.IsNullOrWhiteSpace(credential.Username))
+            if (string.IsNullOrWhiteSpace(credential.Username) && string.IsNullOrWhiteSpace(bank.Username))
                 errors.Add("Credential Username boş.");
 
-            if (string.IsNullOrWhiteSpace(credential.Password))
+            if (string.IsNullOrWhiteSpace(credential.Password) &&
+                string.IsNullOrWhiteSpace(credential.SecretEncrypted) &&
+                string.IsNullOrWhiteSpace(bank.Password))
                 errors.Add("Credential Password boş.");
 
             if (bank.RequiresLink && string.IsNullOrWhiteSpace(bank.DefaultLink))

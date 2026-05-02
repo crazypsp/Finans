@@ -19,6 +19,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
         public int BankId => BankIds.IsBankasi;
         public string BankCode => "ISB";
         public string ProviderCode => "IsBankStatementProvider";
+        public IReadOnlyCollection<string> ProviderAliases { get; } = new[] { "ISB" };
 
         public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
         {

@@ -190,20 +190,39 @@ namespace Finans.Application.Services.Banking
             if (!string.IsNullOrWhiteSpace(account.CustomerNo))
                 extras["customerNo"] = account.CustomerNo;
 
+            var username = FirstNonWhiteSpace(credential.Username, bank.Username);
+            var password = FirstNonWhiteSpace(credential.Password, credential.SecretEncrypted, bank.Password);
+            var link = FirstNonWhiteSpace(GetExtra(extras, "link"), GetExtra(extras, "Link"), credential.ApiBaseUrl, bank.DefaultLink);
+            var tLink = FirstNonWhiteSpace(GetExtra(extras, "tlink"), GetExtra(extras, "TLink"), bank.DefaultTLink);
+
             return new BankStatementRequest
             {
+                CompanyId = bank.CompanyId,
                 BankId = bank.Id,
                 ProviderCode = bank.ProviderCode,
-                Username = credential.Username,
-                Password = credential.Password,
+                Username = RequireCredentialValue(username, nameof(BankCredential.Username), bank.Id),
+                Password = RequireCredentialValue(password, nameof(BankCredential.Password), bank.Id),
                 AccountNumber = account.AccountNumber,
                 StartDate = DateTime.Today.AddDays(-7),
                 EndDate = DateTime.Today,
-                Link = bank.DefaultLink,
-                TLink = bank.DefaultTLink,
+                Link = link,
+                TLink = tLink,
+                Secret = credential.SecretEncrypted,
+                ExtrasJson = credential.ExtrasJson,
                 Extras = extras
             };
         }
+
+        private static string? GetExtra(IReadOnlyDictionary<string, string> extras, string key)
+            => extras.TryGetValue(key, out var value) ? value : null;
+
+        private static string? FirstNonWhiteSpace(params string?[] values)
+            => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+        private static string RequireCredentialValue(string? value, string fieldName, int bankId)
+            => !string.IsNullOrWhiteSpace(value)
+                ? value
+                : throw new InvalidOperationException($"BankId={bankId} için {fieldName} boş. BankCredential kaydını kontrol edin.");
 
         private async Task<int> UpsertTransactionAsync(
             int companyId,

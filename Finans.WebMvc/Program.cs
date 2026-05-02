@@ -1,4 +1,5 @@
 using Finans.Application;
+using Finans.Data;
 using Finans.Data.Context;
 using Finans.Infrastructure;
 using Finans.WebMvc.Security;
@@ -30,6 +31,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 
 var app = builder.Build();
+await app.Services.InitializeFinansDbAsync();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

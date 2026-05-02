@@ -1,4 +1,5 @@
 using Finans.Application;
+using Finans.Data;
 using Finans.Data.Context;
 using Finans.Infrastructure;
 using Finans.WorkerService.Workers;
@@ -26,4 +27,5 @@ builder.Services.AddHostedService<BankImportWorker>();
 builder.Services.AddHostedService<ErpTransferWorker>();
 
 var host = builder.Build();
-host.Run();
+await host.Services.InitializeFinansDbAsync();
+await host.RunAsync();

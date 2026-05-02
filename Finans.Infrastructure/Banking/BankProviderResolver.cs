@@ -9,20 +9,24 @@ namespace Finans.Infrastructure.Banking
     /// </summary>
     public sealed class BankProviderResolver : IBankProviderResolver
     {
-        private readonly IEnumerable<IBankProvider> _providers;
+        private readonly IReadOnlyDictionary<string, IBankProvider> _providers;
 
         public BankProviderResolver(IEnumerable<IBankProvider> providers)
         {
-            _providers = providers;
+            _providers = BankProviderRegistry.Build(providers);
         }
 
         public IBankProvider Resolve(string providerCode)
         {
-            var provider = _providers.FirstOrDefault(p => p.ProviderCode == providerCode);
-            if (provider == null)
-                throw new InvalidOperationException($"Bank provider not found: {providerCode}");
+            if (string.IsNullOrWhiteSpace(providerCode))
+                throw new ArgumentException("ProviderCode zorunlu.", nameof(providerCode));
 
-            return provider;
+            if (_providers.TryGetValue(providerCode, out var provider))
+                return provider;
+
+            var availableCodes = BankProviderRegistry.FormatAvailableCodes(_providers);
+            throw new InvalidOperationException(
+                $"Bank provider not found: {providerCode}. Available codes: {availableCodes}");
         }
     }
 }

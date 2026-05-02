@@ -14,6 +14,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
         public int BankId => BankIds.ZiraatKatilim;
         public string BankCode => "ZKT";
         public string ProviderCode => "ZiraatKatilimStatementProvider";
+        public IReadOnlyCollection<string> ProviderAliases { get; } = new[] { "ZKT" };
 
         private readonly IHttpClientFactory _httpClientFactory;
 

@@ -13,6 +13,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
         public int BankId => BankIds.VakifKatilim;
         public string BankCode => "VKT";
         public string ProviderCode => "VakifKatilimStatementProvider";
+        public IReadOnlyCollection<string> ProviderAliases { get; } = new[] { "VKT", "VKK" };
 
         public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
         {

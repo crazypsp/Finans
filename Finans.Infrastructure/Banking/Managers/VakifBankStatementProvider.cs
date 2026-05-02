@@ -18,6 +18,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
         public int BankId => BankIds.Vakifbank;
         public string BankCode => "VAK";
         public string ProviderCode => "VakifBankStatementProvider";
+        public IReadOnlyCollection<string> ProviderAliases { get; } = new[] { "VAK", "VKF" };
 
         public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
         {

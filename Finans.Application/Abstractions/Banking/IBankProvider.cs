@@ -10,6 +10,7 @@ namespace Finans.Application.Abstractions.Banking
     public interface IBankProvider
     {
         string ProviderCode { get; }
+        IReadOnlyCollection<string> ProviderAliases => Array.Empty<string>();
         Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default);
     }
 }

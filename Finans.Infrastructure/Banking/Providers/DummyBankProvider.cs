@@ -11,6 +11,7 @@ namespace Finans.Infrastructure.Banking.Providers
     public sealed class DummyBankProvider : IBankProvider
     {
         public string ProviderCode => "DUMMY";
+        public IReadOnlyCollection<string> ProviderAliases { get; } = new[] { "DummyBankProvider", "TEST" };
 
         public Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct)
         {

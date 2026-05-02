@@ -18,8 +18,8 @@ namespace Finans.Application.Models.Banking
 
         public string ProviderCode { get; set; } = null!;
 
-        public string? Username { get; set; }=null!;
-        public string? Password { get; set; }=null!;
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
         public string AccountNumber { get; set; } = null!;
 
         // Credential

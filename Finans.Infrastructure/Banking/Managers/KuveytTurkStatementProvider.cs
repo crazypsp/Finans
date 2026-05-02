@@ -17,6 +17,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
         public int BankId => BankIds.KuveytTurk;
         public string BankCode => "KTB";
         public string ProviderCode => "KuveytTurkStatementProvider";
+        public IReadOnlyCollection<string> ProviderAliases { get; } = new[] { "KTB" };
 
         public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
         {

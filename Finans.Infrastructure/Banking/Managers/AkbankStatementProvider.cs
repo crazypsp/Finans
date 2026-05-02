@@ -20,6 +20,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
         public int BankId => BankIds.Akbank;
         public string BankCode => "AKB";
         public string ProviderCode => "AkbankStatementProvider";
+        public IReadOnlyCollection<string> ProviderAliases { get; } = new[] { "AKB" };
 
         public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
         {

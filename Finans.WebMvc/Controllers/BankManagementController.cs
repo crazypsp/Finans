@@ -18,13 +18,16 @@ namespace Finans.WebMvc.Controllers
         public async Task<IActionResult> Banks(CancellationToken ct)
         {
             var companyId = User.GetCompanyId();
-            var list = await _db.Banks.Where(x => !x.IsDeleted).ToListAsync(ct);
+            var list = await _db.Banks
+                .Where(x => x.CompanyId == companyId && !x.IsDeleted)
+                .ToListAsync(ct);
             return View(list);
         }
 
         [HttpPost]
         public async Task<IActionResult> CreateBank(Bank model, CancellationToken ct)
         {
+            model.CompanyId = User.GetCompanyId();
             model.CreatedAtUtc = DateTime.UtcNow;
             model.IsDeleted = false;
             _db.Banks.Add(model);

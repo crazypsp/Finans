@@ -14,6 +14,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
         public int BankId => BankIds.TurkiyeFinans;
         public string BankCode => "TFN";
         public string ProviderCode => "TurkiyeFinansStatementProvider";
+        public IReadOnlyCollection<string> ProviderAliases { get; } = new[] { "TFN", "TFB" };
 
         public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
         {

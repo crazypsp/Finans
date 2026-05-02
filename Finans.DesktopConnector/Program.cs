@@ -1,6 +1,7 @@
 using Finans.Application;
 using Finans.Application.Abstractions.ERP;
 using Finans.Application.Abstractions.Transfer;
+using Finans.Data;
 using Finans.Data.Context;
 using Finans.DesktopConnector.Services;
 using Finans.DesktopConnector.Workers;
@@ -45,7 +46,8 @@ try
     builder.Services.AddHostedService<ErpTransferWorker>();
 
     var host = builder.Build();
-    host.Run();
+    await host.Services.InitializeFinansDbAsync();
+    await host.RunAsync();
 }
 catch (Exception ex)
 {

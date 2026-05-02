@@ -2,6 +2,7 @@
 using System.Text;
 using Finans.Application.Abstractions.Banking;
 using Finans.Application.Models.Banking;
+using Finans.Infrastructure.Banking;
 
 namespace Finans.Infrastructure.Banking.Managers
 {
@@ -11,10 +12,7 @@ namespace Finans.Infrastructure.Banking.Managers
 
         public BankStatementManager(IEnumerable<IBankProvider> providers)
         {
-            _providers = providers.ToDictionary(
-                p => p.ProviderCode,
-                p => p,
-                StringComparer.OrdinalIgnoreCase);
+            _providers = BankProviderRegistry.Build(providers);
         }
 
         public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
@@ -22,7 +20,11 @@ namespace Finans.Infrastructure.Banking.Managers
             Validate(request);
 
             if (!_providers.TryGetValue(request.ProviderCode, out var provider))
-                throw new InvalidOperationException($"ProviderCode={request.ProviderCode} için provider yok.");
+            {
+                var availableCodes = BankProviderRegistry.FormatAvailableCodes(_providers);
+                throw new InvalidOperationException(
+                    $"ProviderCode={request.ProviderCode} için provider yok. Kayıtlı kodlar: {availableCodes}");
+            }
 
             BankStatementResult raw;
             try
