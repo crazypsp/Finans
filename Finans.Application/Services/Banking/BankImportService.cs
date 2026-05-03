@@ -22,6 +22,7 @@ namespace Finans.Application.Services.Banking
         private readonly IBankImportValidationService _validationService;
         private readonly INotificationService _notificationService;
         private readonly Abstractions.ERP.IBankTransactionMatchingService _matchingService;
+        private static readonly TimeSpan ProviderCallTimeout = TimeSpan.FromSeconds(60);
 
         public BankImportService(
             FinansDbContext db,
@@ -364,8 +365,41 @@ namespace Finans.Application.Services.Banking
 
             try
             {
-                result = await _bankStatementManager.GetStatementAsync(request, ct);              
+                result = await _bankStatementManager
+                    .GetStatementAsync(request, ct)
+                    .WaitAsync(ProviderCallTimeout, ct);
+            }
+            catch (TimeoutException ex)
+            {
+                _db.BankApiPayloads.Add(new BankApiPayload
+                {
+                    CompanyId = bank.CompanyId,
+                    BankId = bank.Id,
+                    Operation = "StatementImport",
+                    RequestText = SerializeRequest(request),
+                    ResponseText = null,
+                    IsSuccess = false,
+                    ErrorMessage = $"Provider timeout: {ex.Message}",
+                    ExecutedAtUtc = DateTime.UtcNow,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    IsDeleted = false
+                });
 
+                _db.BankIntegrationLogs.Add(new BankIntegrationLog
+                {
+                    CompanyId = bank.CompanyId,
+                    BankId = bank.Id,
+                    Status = "Timeout",
+                    Level = Finans.Entities.Common.LogLevel.Error,
+                    Operation = "StatementImport",
+                    ErrorMessage = $"Provider={bank.ProviderCode}, Account={account.AccountNumber}: 60 saniye icinde cevap alinmadi.",
+                    OccurredAtUtc = DateTime.UtcNow,
+                    CreatedAtUtc = DateTime.UtcNow,
+                    IsDeleted = false
+                });
+
+                await _db.SaveChangesAsync(ct);
+                return;
             }
             catch (Exception ex)
             {

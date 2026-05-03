@@ -604,10 +604,15 @@ namespace Finans.Data
             var bankSeeds = new[]
             {
                 new BankSeed("DUMMY", "Demo/Dummy Banka", 0, false, false, true, null, null),
+                new BankSeed("ALB", "Albaraka Türk", 1, false, false, true, null, null),
                 new BankSeed("AKB", "Akbank", 3, false, false, true, null, null),
+                new BankSeed("ANB", "Anadolubank", 4, false, false, true, null, null),
+                new BankSeed("DEN", "Denizbank", 6, false, false, true, null, null),
+                new BankSeed("EML", "Emlak Katılım", 12, false, false, true, null, null),
                 new BankSeed("ISB", "İş Bankası", 2, true, true, true, null, null),
                 new BankSeed("KTB", "Kuveyt Türk", 5, false, false, true, null, null),
                 new BankSeed("QNB", "QNB Finansbank", 8, false, false, true, null, null),
+                new BankSeed("SKR", "Şekerbank", 10, false, false, true, null, null),
                 new BankSeed("TFN", "Türkiye Finans", 7, false, false, true, null, null),
                 new BankSeed("VKF", "VakıfBank", 13, false, false, true, null, null),
                 new BankSeed("VKK", "Vakıf Katılım", 9, false, false, true, null, null),
