@@ -42,6 +42,7 @@ namespace Finans.Infrastructure.Banking.Legacy
 
             return new BankStatementRow
             {
+                ExternalTransactionId = FirstNonEmpty(x.PROCESSID),
                 ExternalUniqueKey = FirstNonEmpty(x.PROCESSID, x.PROCESSREFNO)
                     ?? $"{x.HESAPNO}|{txDate:O}|{amount.ToString(CultureInfo.InvariantCulture)}|{desc}",
                 TransactionDate = txDate,

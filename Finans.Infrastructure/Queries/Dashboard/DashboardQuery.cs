@@ -22,19 +22,79 @@ namespace Finans.Infrastructure.Queries.Dashboard
         {
             const string sql = @"
 SELECT
-    (SELECT COUNT(1) FROM BankTransactions WITH (NOLOCK) WHERE CompanyId = @CompanyId) AS TotalTransactions,
-    (SELECT COUNT(1) FROM BankTransactions WITH (NOLOCK) WHERE CompanyId = @CompanyId AND IsTransferred = 0) AS NotTransferredCount,
-    (SELECT COUNT(1) FROM BankTransactions WITH (NOLOCK) WHERE CompanyId = @CompanyId AND IsTransferred = 1) AS TransferredCount,
+    (SELECT COUNT(1) FROM BankTransactions WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0
+          AND (@Start IS NULL OR TransactionDate >= @Start)
+          AND (@End IS NULL OR TransactionDate <= @End)
+    ) AS TotalTransactions,
+    (SELECT COUNT(1) FROM BankTransactions WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND IsTransferred = 0
+          AND (@Start IS NULL OR TransactionDate >= @Start)
+          AND (@End IS NULL OR TransactionDate <= @End)
+    ) AS NotTransferredCount,
+    (SELECT COUNT(1) FROM BankTransactions WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND IsTransferred = 1
+          AND (@Start IS NULL OR TransactionDate >= @Start)
+          AND (@End IS NULL OR TransactionDate <= @End)
+    ) AS TransferredCount,
     (SELECT ISNULL(SUM(Amount),0) FROM BankTransactions WITH (NOLOCK)
         WHERE CompanyId = @CompanyId
+          AND IsDeleted = 0
           AND (@Start IS NULL OR TransactionDate >= @Start)
           AND (@End IS NULL OR TransactionDate <= @End)
     ) AS TotalAmountInRange,
-    (SELECT MAX(CompletedAtUtc) FROM TransactionImports WITH (NOLOCK) WHERE CompanyId = @CompanyId) AS LastImportAtUtc,
-    (SELECT COUNT(1) FROM TransactionImports WITH (NOLOCK)
+    (SELECT ISNULL(SUM(Amount),0) FROM BankTransactions WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND DebitCredit = 'C'
+          AND (@Start IS NULL OR TransactionDate >= @Start)
+          AND (@End IS NULL OR TransactionDate <= @End)
+    ) AS CashInAmount,
+    (SELECT ISNULL(SUM(Amount),0) FROM BankTransactions WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND DebitCredit = 'D'
+          AND (@Start IS NULL OR TransactionDate >= @Start)
+          AND (@End IS NULL OR TransactionDate <= @End)
+    ) AS CashOutAmount,
+    (SELECT
+        ISNULL(SUM(CASE WHEN DebitCredit = 'C' THEN Amount ELSE -Amount END),0)
+        FROM BankTransactions WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0
+          AND (@Start IS NULL OR TransactionDate >= @Start)
+          AND (@End IS NULL OR TransactionDate <= @End)
+    ) AS NetCashFlow,
+    (SELECT TOP (1) ISNULL(BalanceAfterTransaction,0) FROM BankTransactions WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND BalanceAfterTransaction IS NOT NULL
+        ORDER BY TransactionDate DESC, Id DESC
+    ) AS LatestBalance,
+    (SELECT COUNT(1) FROM ErpTransferItems WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND Status = 'Pending'
+    ) AS PendingTransferCount,
+    (SELECT COUNT(1) FROM ErpTransferItems WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND Status = 'Failed'
+    ) AS FailedTransferCount,
+    (SELECT COUNT(1) FROM Banks WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND IsActive = 1
+    ) AS ActiveBankCount,
+    (SELECT COUNT(1) FROM BankAccounts WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND IsActive = 1
+    ) AS ActiveBankAccountCount,
+    (SELECT COUNT(1) FROM ErpGlAccounts WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND IsActive = 1
+    ) AS ErpGlAccountCount,
+    (SELECT COUNT(1) FROM ErpCurrentAccounts WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND IsActive = 1
+    ) AS ErpCurrentAccountCount,
+    (SELECT COUNT(1) FROM ErpBankAccounts WITH (NOLOCK)
+        WHERE CompanyId = @CompanyId AND IsDeleted = 0 AND IsActive = 1
+    ) AS ErpBankAccountCount,
+    (SELECT MAX(v) FROM (VALUES
+        ((SELECT MAX(LastSyncedAtUtc) FROM ErpGlAccounts WITH (NOLOCK) WHERE CompanyId = @CompanyId)),
+        ((SELECT MAX(LastSyncedAtUtc) FROM ErpCurrentAccounts WITH (NOLOCK) WHERE CompanyId = @CompanyId)),
+        ((SELECT MAX(LastSyncedAtUtc) FROM ErpBankAccounts WITH (NOLOCK) WHERE CompanyId = @CompanyId))
+    ) AS syncs(v)) AS LastErpSyncAtUtc,
+    (SELECT MAX(ExecutedAtUtc) FROM BankApiPayloads WITH (NOLOCK) WHERE CompanyId = @CompanyId) AS LastImportAtUtc,
+    (SELECT COUNT(1) FROM BankIntegrationLogs WITH (NOLOCK)
         WHERE CompanyId = @CompanyId
-          AND Status IN (1,4,5) -- Warning/Error/Critical gibi değil: biz TransferStatus kullanıyoruz, bunu Gün 2 sonunda netleştiririz
-          AND StartedAtUtc >= DATEADD(HOUR,-24, SYSUTCDATETIME())
+          AND Status IN ('Failed','Exception','ValidationFailed')
+          AND OccurredAtUtc >= DATEADD(HOUR,-24, SYSUTCDATETIME())
     ) AS FailedImportCountLast24h;
 ";
 

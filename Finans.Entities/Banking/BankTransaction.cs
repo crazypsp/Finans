@@ -28,7 +28,10 @@ namespace Finans.Entities.Banking
         public decimal? BalanceAfterTransaction { get; set; }
         public string? ReferenceNumber { get; set; }
 
-        // Bu alan UNIQUE olmalı (Fluent API)
+        // Bankanın döndürdüğü hareket ID'si. Tekrarlı import engeli bu ID ile garanti edilir.
+        public string? ExternalTransactionId { get; set; }
+
+        // Normalize edilmiş kaynak anahtar. Company/Bank/Account/ID bilgisini içerir.
         public string ExternalUniqueKey { get; set; } = null!;
 
         // Eşleştirme (Logo cari)

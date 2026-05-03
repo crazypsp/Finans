@@ -17,6 +17,7 @@ namespace Finans.Infrastructure.Banking.DependencyInjection
             services.AddScoped<IBankProvider, IsBankStatementProvider>();
             services.AddScoped<IBankProvider, AkbankStatementProvider>();
             services.AddScoped<IBankProvider, KuveytTurkStatementProvider>();
+            services.AddScoped<IBankProvider, QnbMaestroStatementProvider>();
             services.AddScoped<IBankProvider, VakifBankStatementProvider>();
             services.AddScoped<IBankProvider, ZiraatKatilimStatementProvider>();
             services.AddScoped<IBankProvider, TurkiyeFinansStatementProvider>();

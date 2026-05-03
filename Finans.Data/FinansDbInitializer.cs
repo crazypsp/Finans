@@ -347,9 +347,10 @@ namespace Finans.Data
 
             await db.SaveChangesAsync(ct);
 
-            return await db.Roles.IgnoreQueryFilters()
+            var roles = await db.Roles.IgnoreQueryFilters().ToListAsync(ct);
+            return roles
                 .Where(x => seedCodes.Contains(x.Code))
-                .ToDictionaryAsync(x => x.Code, x => x, ct);
+                .ToDictionary(x => x.Code, x => x);
         }
 
         private static async Task<Dictionary<string, User>> EnsureUsersAsync(FinansDbContext db, CancellationToken ct)
@@ -358,7 +359,9 @@ namespace Finans.Data
             {
                 new UserSeed("admin", "admin@finans.local", "Sistem", "Yönetici", "HcXuAK10SjWLJPp2fjPLGDZzYBUHjuLTj/VUPgmfEuE=", true),
                 new UserSeed("system", "system@finans.local", "Sistem", "Servisi", "tZ6GcKBQNHdPy4lKFkUbrqEP7oFIotGX4NTy/o1qTYE=", false),
-                new UserSeed("muhasebe", "muhasebe@finans.local", "Muhasebe", "Kullanıcı", "7kRWXzTNa95r4b/Yz/Gs764Xa+vhx28hJOiAH7Ul4k8=", false)
+                new UserSeed("muhasebe", "muhasebe@finans.local", "Muhasebe", "Kullanıcı", "7kRWXzTNa95r4b/Yz/Gs764Xa+vhx28hJOiAH7Ul4k8=", false),
+                new UserSeed("operator", "operator@finans.local", "Finans", "Operator", "5w11B56xzOpVrDfIB5YlMT/ibbmsIAAxKi+GT8/p4ls=", false),
+                new UserSeed("izleyici", "izleyici@finans.local", "Finans", "Izleyici", "sfecl/+wAtOelrVn2k0al1DzR1GazfL3LBjYERdixbY=", false)
             };
             var seedUserNames = seeds.Select(s => s.UserName).ToArray();
 
@@ -401,9 +404,10 @@ namespace Finans.Data
 
             await db.SaveChangesAsync(ct);
 
-            return await db.Users.IgnoreQueryFilters()
+            var users = await db.Users.IgnoreQueryFilters().ToListAsync(ct);
+            return users
                 .Where(x => seedUserNames.Contains(x.UserName))
-                .ToDictionaryAsync(x => x.UserName, x => x, ct);
+                .ToDictionary(x => x.UserName, x => x);
         }
 
         private static async Task EnsureCompanyUsersAsync(
@@ -415,6 +419,8 @@ namespace Finans.Data
             await EnsureCompanyUserAsync(db, company.Id, users["admin"].Id, true, ct);
             await EnsureCompanyUserAsync(db, company.Id, users["system"].Id, true, ct);
             await EnsureCompanyUserAsync(db, company.Id, users["muhasebe"].Id, false, ct);
+            await EnsureCompanyUserAsync(db, company.Id, users["operator"].Id, false, ct);
+            await EnsureCompanyUserAsync(db, company.Id, users["izleyici"].Id, false, ct);
             await db.SaveChangesAsync(ct);
         }
 
@@ -458,6 +464,8 @@ namespace Finans.Data
             await EnsureUserRoleAsync(db, users["admin"].Id, roles[RoleCodes.ADMIN].Id, null, users["admin"].Id, ct);
             await EnsureUserRoleAsync(db, users["system"].Id, roles[RoleCodes.COMPANY_ADMIN].Id, company.Id, users["admin"].Id, ct);
             await EnsureUserRoleAsync(db, users["muhasebe"].Id, roles[RoleCodes.ACCOUNTANT].Id, company.Id, users["admin"].Id, ct);
+            await EnsureUserRoleAsync(db, users["operator"].Id, roles[RoleCodes.ACCOUNTANT].Id, company.Id, users["admin"].Id, ct);
+            await EnsureUserRoleAsync(db, users["izleyici"].Id, roles[RoleCodes.COMPANY_USER].Id, company.Id, users["admin"].Id, ct);
             await db.SaveChangesAsync(ct);
         }
 
@@ -520,9 +528,10 @@ namespace Finans.Data
 
             await db.SaveChangesAsync(ct);
 
-            var menus = await db.MenuItems.IgnoreQueryFilters()
+            var menuItems = await db.MenuItems.IgnoreQueryFilters().ToListAsync(ct);
+            var menus = menuItems
                 .Where(x => seedCodes.Contains(x.Code))
-                .ToDictionaryAsync(x => x.Code, x => x, ct);
+                .ToDictionary(x => x.Code, x => x);
 
             foreach (var seed in seeds)
             {
@@ -598,6 +607,7 @@ namespace Finans.Data
                 new BankSeed("AKB", "Akbank", 3, false, false, true, null, null),
                 new BankSeed("ISB", "İş Bankası", 2, true, true, true, null, null),
                 new BankSeed("KTB", "Kuveyt Türk", 5, false, false, true, null, null),
+                new BankSeed("QNB", "QNB Finansbank", 8, false, false, true, null, null),
                 new BankSeed("TFN", "Türkiye Finans", 7, false, false, true, null, null),
                 new BankSeed("VKF", "VakıfBank", 13, false, false, true, null, null),
                 new BankSeed("VKK", "Vakıf Katılım", 9, false, false, true, null, null),

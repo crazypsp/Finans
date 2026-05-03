@@ -21,8 +21,8 @@
     <div class="col-xl-3 col-md-6">
         <div class="stat-card">
             <div class="stat-icon bg-warning"><i class="bi bi-hourglass-split"></i></div>
-            <div class="stat-value">@Model.NotTransferredCount.ToString("N0")</div>
-            <div class="stat-label">Aktarılmamış</div>
+            <div class="stat-value">@Model.PendingTransferCount.ToString("N0")</div>
+            <div class="stat-label">Kuyrukta Bekleyen</div>
         </div>
     </div>
     <div class="col-xl-3 col-md-6">
@@ -35,8 +35,39 @@
     <div class="col-xl-3 col-md-6">
         <div class="stat-card">
             <div class="stat-icon bg-info"><i class="bi bi-cash-stack"></i></div>
-            <div class="stat-value">@Model.TotalAmountInRange.ToString("N2")</div>
-            <div class="stat-label">Toplam Tutar (₺)</div>
+            <div class="stat-value">@Model.NetCashFlow.ToString("N2")</div>
+            <div class="stat-label">Net Nakit Akışı</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon bg-success"><i class="bi bi-arrow-down-circle"></i></div>
+            <div class="stat-value">@Model.CashInAmount.ToString("N2")</div>
+            <div class="stat-label">Nakit Giriş</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon bg-danger"><i class="bi bi-arrow-up-circle"></i></div>
+            <div class="stat-value">@Model.CashOutAmount.ToString("N2")</div>
+            <div class="stat-label">Nakit Çıkış</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon bg-primary"><i class="bi bi-bank"></i></div>
+            <div class="stat-value">@Model.ActiveBankAccountCount.ToString("N0")</div>
+            <div class="stat-label">Aktif Banka Hesabı</div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="stat-card">
+            <div class="stat-icon bg-secondary"><i class="bi bi-diagram-3"></i></div>
+            <div class="stat-value">@((Model.ErpGlAccountCount + Model.ErpCurrentAccountCount + Model.ErpBankAccountCount).ToString("N0"))</div>
+            <div class="stat-label">ERP Finans Kartı</div>
         </div>
     </div>
 </div>
@@ -160,6 +191,20 @@
                             }
                             %@rate.ToString("F1") tamamlandı
                         </div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-dot blue"></div>
+                    <div>
+                        <div class="activity-text">ERP hesap planı</div>
+                        <div class="activity-time">GL @Model.ErpGlAccountCount.ToString("N0") · Cari @Model.ErpCurrentAccountCount.ToString("N0") · Banka @Model.ErpBankAccountCount.ToString("N0")</div>
+                    </div>
+                </div>
+                <div class="activity-item">
+                    <div class="activity-dot @(Model.FailedTransferCount == 0 ? "green" : "red")"></div>
+                    <div>
+                        <div class="activity-text">Başarısız ERP aktarım</div>
+                        <div class="activity-time">@Model.FailedTransferCount adet · Son senkron: @(Model.LastErpSyncAtUtc?.ToString("dd.MM.yyyy HH:mm") ?? "-")</div>
                     </div>
                 </div>
             </div>

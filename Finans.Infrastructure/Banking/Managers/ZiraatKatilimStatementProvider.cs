@@ -43,7 +43,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(scheme, parameter);
 
             var result = new List<LegacyBankRow>();
-            var resultTest = new BankStatementResult();
+            var rawResponses = new List<string>();
 
             // Banka max 7 gün istiyor -> otomatik parçala
             foreach (var (from, to) in SplitMax7Days(request.StartDate, request.EndDate))
@@ -63,10 +63,11 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
                 if (!resp.IsSuccessStatusCode)
                     throw new Exception($"ZiraatKatılım API hata {(int)resp.StatusCode}: {json}");
 
+                rawResponses.Add(json);
                 ParseAccountServiceJson(json, request.AccountNumber, BankCode, result);
             }
 
-            return resultTest;
+            return LegacyBankRowMapper.ToResult(result, string.Join(Environment.NewLine, rawResponses));
         }
 
         private static (Uri baseAddress, string resourcePath) ResolveEndpoint(string? link)

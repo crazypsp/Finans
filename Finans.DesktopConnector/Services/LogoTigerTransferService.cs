@@ -3,6 +3,7 @@ using Finans.Contracts.Transfer;
 using Finans.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using System.Runtime.Versioning;
 
 // NOT: UnityObjects COM referansı projeye eklenmediğinden,
 // Logo Tiger nesneleri 'dynamic' olarak kullanılmaktadır.
@@ -18,6 +19,7 @@ namespace Finans.DesktopConnector.Services
     /// Logo Tiger'a banka hareketlerini muhasebe fişi olarak aktarır.
     /// Gerçek voucher mapping burada yapılır.
     /// </summary>
+    [SupportedOSPlatform("windows")]
     public sealed class LogoTigerTransferService : ILogoTigerTransferService
     {
         private readonly FinansDbContext _db;
@@ -52,6 +54,11 @@ namespace Finans.DesktopConnector.Services
                 return Fail("BankTransaction bulunamadı.");
             }
 
+            if (tx.IsTransferred)
+            {
+                return Fail("Bu banka hareketi zaten aktarılmış.");
+            }
+
             var validationError = ValidateTransferInputs(tx, glCode, bankAccountCode);
             if (validationError != null)
             {
@@ -74,16 +81,16 @@ namespace Finans.DesktopConnector.Services
                 if (!login.IsSuccess)
                     return login;
 
-                // DataObjectType.doGLVoucher = 24 (Logo Tiger sabit değeri)
-                const int doGLVoucher = 24;
-                dynamic? data = unityApp!.NewDataObject(doGLVoucher);
+                // DataObjectType.doBankVoucher = 24
+                const int doBankVoucher = 24;
+                dynamic? data = unityApp!.NewDataObject(doBankVoucher);
                 if (data == null)
-                    return Fail("Logo voucher nesnesi oluşturulamadı.");
+                    return Fail("Logo banka işlem fişi nesnesi oluşturulamadı.");
 
                 data.New();
 
-                FillVoucherHeader(data, tx, bankAccountCode);
-                FillVoucherLines(data, tx, currentCode, glCode!, bankAccountCode!);
+                FillBankVoucherHeader(data, tx, bankAccountCode);
+                FillBankVoucherLines(data, tx, currentCode, glCode!, bankAccountCode!);
 
                 var postResult = PostVoucher(data, unityApp);
                 if (!postResult.IsSuccess)
@@ -158,24 +165,35 @@ namespace Finans.DesktopConnector.Services
             return null;
         }
 
-        private static void FillVoucherHeader(
+        private static void FillBankVoucherHeader(
             dynamic data,
             dynamic tx,
             string? bankAccountCode)
         {
-            SetField(data, "TYPE", 1);
+            var amount = Convert.ToDecimal(tx.Amount);
+            var isIncoming = IsIncoming(tx);
+            var voucherType = isIncoming ? 3 : 4;
+            var sign = isIncoming ? 0 : 1;
+
+            SetField(data, "TYPE", voucherType);
+            SetField(data, "SIGN", sign);
             SetField(data, "NUMBER", "~");
             SetField(data, "DATE", tx.TransactionDate);
             SetField(data, "TIME", DateTime.Now);
+            SetField(data, "DIVISION", 0);
+            SetField(data, "DEPARTMENT", 0);
+            SetField(data, "DEPARMENT", 0);
             SetField(data, "DOC_NUMBER", tx.ReferenceNumber);
             SetField(data, "AUXIL_CODE", bankAccountCode);
             SetField(data, "AUTH_CODE", "FINANS");
             SetField(data, "NOTES1", tx.Description);
             SetField(data, "CURRSEL_TOTALS", 1);
             SetField(data, "RC_XRATE", 1);
+            SetField(data, isIncoming ? "TOTAL_DEBIT" : "TOTAL_CREDIT", amount);
+            SetField(data, isIncoming ? "RC_TOTAL_DEBIT" : "RC_TOTAL_CREDIT", amount);
         }
 
-        private static void FillVoucherLines(
+        private static void FillBankVoucherLines(
             dynamic data,
             dynamic tx,
             string? currentCode,
@@ -186,71 +204,92 @@ namespace Finans.DesktopConnector.Services
             dynamic lines = data.DataFields.FieldByName("TRANSACTIONS").Lines;
 
             var amount = Convert.ToDecimal(tx.Amount);
-            var isCredit = string.Equals((string?)tx.DebitCredit, "C", StringComparison.OrdinalIgnoreCase);
+            var isIncoming = IsIncoming(tx);
+            var voucherType = isIncoming ? 3 : 4;
+            var sign = isIncoming ? 0 : 1;
+            var bankProcType = isIncoming ? 1 : 2;
 
-            if (isCredit)
-            {
-                // Para bankaya girmiş
-                AppendLine(
-                    lines,
-                    accountCode: bankAccountCode,
-                    currentCode: currentCode,
-                    description: tx.Description,
-                    docNumber: tx.ReferenceNumber,
-                    debit: amount,
-                    credit: 0m);
-
-                AppendLine(
-                    lines,
-                    accountCode: glCode,
-                    currentCode: currentCode,
-                    description: tx.Description,
-                    docNumber: tx.ReferenceNumber,
-                    debit: 0m,
-                    credit: amount);
-            }
-            else
-            {
-                // Para bankadan çıkmış
-                AppendLine(
-                    lines,
-                    accountCode: glCode,
-                    currentCode: currentCode,
-                    description: tx.Description,
-                    docNumber: tx.ReferenceNumber,
-                    debit: amount,
-                    credit: 0m);
-
-                AppendLine(
-                    lines,
-                    accountCode: bankAccountCode,
-                    currentCode: currentCode,
-                    description: tx.Description,
-                    docNumber: tx.ReferenceNumber,
-                    debit: 0m,
-                    credit: amount);
-            }
+            AppendBankVoucherLine(
+                lines,
+                tx,
+                bankAccountCode,
+                currentCode,
+                glCode,
+                amount,
+                isIncoming ? amount : 0m,
+                isIncoming ? 0m : amount,
+                voucherType,
+                sign,
+                bankProcType);
         }
 
-        private static void AppendLine(
+        private static void AppendBankVoucherLine(
             dynamic lines,
-            string accountCode,
+            dynamic tx,
+            string bankAccountCode,
             string? currentCode,
-            string? description,
-            string? docNumber,
+            string glCode,
+            decimal amount,
             decimal debit,
-            decimal credit)
+            decimal credit,
+            int voucherType,
+            int sign,
+            int bankProcType)
         {
             // dynamic: Lines.AppendLine() COM nesnesi
             dynamic line = lines.AppendLine();
 
-            SetLineField(line, "ACCOUNT_CODE", accountCode);
+            SetLineField(line, "TYPE", 1);
+            SetLineField(line, "BANKACC_CODE", bankAccountCode);
             SetLineField(line, "ARP_CODE", currentCode);
-            SetLineField(line, "DESCRIPTION", description);
-            SetLineField(line, "DOC_NUMBER", docNumber);
+            SetLineField(line, "ACCOUNT_CODE", glCode);
+            SetLineField(line, "GL_CODE", glCode);
+            SetLineField(line, "DESCRIPTION", tx.Description);
+            SetLineField(line, "DOC_NUMBER", tx.ReferenceNumber);
+            SetLineField(line, "DATE", tx.TransactionDate);
+            SetLineField(line, "SIGN", sign);
+            SetLineField(line, "TRCODE", voucherType);
+            SetLineField(line, "MODULENR", 7);
             SetLineField(line, "DEBIT", debit);
             SetLineField(line, "CREDIT", credit);
+            SetLineField(line, "AMOUNT", amount);
+            SetLineField(line, "TC_XRATE", 1);
+            SetLineField(line, "TC_AMOUNT", amount);
+            SetLineField(line, "RC_XRATE", 1);
+            SetLineField(line, "RC_AMOUNT", amount);
+            SetLineField(line, "BANK_PROC_TYPE", bankProcType);
+            SetLineField(line, "BN_CRDTYPE", 1);
+            SetLineField(line, "DUE_DATE", tx.TransactionDate);
+            SetLineField(line, "DIVISION", 0);
+
+            AppendPaymentLine(line, tx.TransactionDate, amount, voucherType);
         }
+
+        private static void AppendPaymentLine(dynamic line, DateTime transactionDate, decimal amount, int voucherType)
+        {
+            try
+            {
+                dynamic paymentLines = line.FieldByName("PAYMENT_LIST").Lines;
+                dynamic paymentLine = paymentLines.AppendLine();
+
+                SetLineField(paymentLine, "DATE", transactionDate);
+                SetLineField(paymentLine, "MODULENR", 7);
+                SetLineField(paymentLine, "TRCODE", voucherType);
+                SetLineField(paymentLine, "TOTAL", amount);
+                SetLineField(paymentLine, "PROCDATE", transactionDate);
+                SetLineField(paymentLine, "TRRATE", 1);
+                SetLineField(paymentLine, "REPORTRATE", 1);
+                SetLineField(paymentLine, "DISCOUNT_DUEDATE", transactionDate);
+                SetLineField(paymentLine, "DISCTRDELLIST", 0);
+            }
+            catch
+            {
+                // Bazı Logo sürümlerinde ödeme satırı otomatik üretilebilir.
+            }
+        }
+
+        private static bool IsIncoming(dynamic tx)
+            => string.Equals((string?)tx.DebitCredit, "C", StringComparison.OrdinalIgnoreCase);
 
         private static ErpTransferExecutionResultDto PostVoucher(dynamic data, dynamic unityApp)
         {
@@ -282,11 +321,15 @@ namespace Finans.DesktopConnector.Services
             try
             {
                 var validateErrors = data.ValidateErrors;
-                if (validateErrors == null || validateErrors.Count == 0)
+                if (validateErrors is null)
+                    return null;
+
+                var count = Convert.ToInt32(validateErrors.Count);
+                if (count == 0)
                     return null;
 
                 var errors = new List<string>();
-                for (var i = 0; i < validateErrors.Count; i++)
+                for (var i = 0; i < count; i++)
                 {
                     errors.Add(validateErrors[i].Error);
                 }

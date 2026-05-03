@@ -106,7 +106,27 @@ namespace Finans.Data.Context
             modelBuilder.Entity<Role>().HasIndex(x => x.Code).IsUnique();
             modelBuilder.Entity<MenuItem>().HasIndex(x => x.Code).IsUnique();
             modelBuilder.Entity<Company>().HasIndex(x => x.PrimaryDomain).IsUnique();
-            modelBuilder.Entity<BankTransaction>().HasIndex(x => x.ExternalUniqueKey).IsUnique();
+
+            modelBuilder.Entity<BankTransaction>(entity =>
+            {
+                entity.Property(x => x.Amount).HasPrecision(18, 4);
+                entity.Property(x => x.BalanceAfterTransaction).HasPrecision(18, 4);
+                entity.Property(x => x.ExternalTransactionId).HasMaxLength(128);
+                entity.Property(x => x.ExternalUniqueKey).HasMaxLength(450);
+
+                entity.HasIndex(x => new { x.CompanyId, x.BankId, x.ExternalUniqueKey })
+                    .IsUnique();
+
+                entity.HasIndex(x => new { x.CompanyId, x.BankId, x.ExternalTransactionId })
+                    .IsUnique()
+                    .HasFilter("[ExternalTransactionId] IS NOT NULL");
+            });
+
+            modelBuilder.Entity<BankTransactionRule>(entity =>
+            {
+                entity.Property(x => x.MinAmount).HasPrecision(18, 4);
+                entity.Property(x => x.MaxAmount).HasPrecision(18, 4);
+            });
 
             // Soft Delete filter (minimum set):
             // Neden var?
@@ -189,6 +209,38 @@ namespace Finans.Data.Context
                     IsSystemAdmin = false,
                     IsDeleted = false,
                     CreatedAtUtc = seedTime
+                },
+                // Operator: operator / Operator123!
+                new User
+                {
+                    Id = 4,
+                    UserName = "operator",
+                    Email = "operator@finans.local",
+                    FirstName = "Finans",
+                    LastName = "Operator",
+                    PasswordHash = "5w11B56xzOpVrDfIB5YlMT/ibbmsIAAxKi+GT8/p4ls=",
+                    PasswordSalt = seedSalt,
+                    IsActive = true,
+                    IsEmailVerified = true,
+                    IsSystemAdmin = false,
+                    IsDeleted = false,
+                    CreatedAtUtc = seedTime
+                },
+                // Izleyici: izleyici / Izleyici123!
+                new User
+                {
+                    Id = 5,
+                    UserName = "izleyici",
+                    Email = "izleyici@finans.local",
+                    FirstName = "Finans",
+                    LastName = "Izleyici",
+                    PasswordHash = "sfecl/+wAtOelrVn2k0al1DzR1GazfL3LBjYERdixbY=",
+                    PasswordSalt = seedSalt,
+                    IsActive = true,
+                    IsEmailVerified = true,
+                    IsSystemAdmin = false,
+                    IsDeleted = false,
+                    CreatedAtUtc = seedTime
                 }
             );
 
@@ -196,7 +248,9 @@ namespace Finans.Data.Context
             modelBuilder.Entity<UserRole>().HasData(
                 new UserRole { Id = 1, UserId = 1, RoleId = 1, ScopeCompanyId = null, AssignedAtUtc = seedTime, AssignedByUserId = 1, IsDeleted = false, CreatedAtUtc = seedTime },
                 new UserRole { Id = 2, UserId = 2, RoleId = 5, ScopeCompanyId = 1, AssignedAtUtc = seedTime, AssignedByUserId = 1, IsDeleted = false, CreatedAtUtc = seedTime },
-                new UserRole { Id = 3, UserId = 3, RoleId = 4, ScopeCompanyId = 1, AssignedAtUtc = seedTime, AssignedByUserId = 1, IsDeleted = false, CreatedAtUtc = seedTime }
+                new UserRole { Id = 3, UserId = 3, RoleId = 4, ScopeCompanyId = 1, AssignedAtUtc = seedTime, AssignedByUserId = 1, IsDeleted = false, CreatedAtUtc = seedTime },
+                new UserRole { Id = 4, UserId = 4, RoleId = 4, ScopeCompanyId = 1, AssignedAtUtc = seedTime, AssignedByUserId = 1, IsDeleted = false, CreatedAtUtc = seedTime },
+                new UserRole { Id = 5, UserId = 5, RoleId = 6, ScopeCompanyId = 1, AssignedAtUtc = seedTime, AssignedByUserId = 1, IsDeleted = false, CreatedAtUtc = seedTime }
             );
 
             // --- FİRMA ---
@@ -221,7 +275,9 @@ namespace Finans.Data.Context
             modelBuilder.Entity<CompanyUser>().HasData(
                 new CompanyUser { Id = 1, CompanyId = 1, UserId = 1, IsCompanyAdmin = true, IsActive = true, IsDeleted = false, CreatedAtUtc = seedTime },
                 new CompanyUser { Id = 2, CompanyId = 1, UserId = 2, IsCompanyAdmin = true, IsActive = true, IsDeleted = false, CreatedAtUtc = seedTime },
-                new CompanyUser { Id = 3, CompanyId = 1, UserId = 3, IsCompanyAdmin = false, IsActive = true, IsDeleted = false, CreatedAtUtc = seedTime }
+                new CompanyUser { Id = 3, CompanyId = 1, UserId = 3, IsCompanyAdmin = false, IsActive = true, IsDeleted = false, CreatedAtUtc = seedTime },
+                new CompanyUser { Id = 4, CompanyId = 1, UserId = 4, IsCompanyAdmin = false, IsActive = true, IsDeleted = false, CreatedAtUtc = seedTime },
+                new CompanyUser { Id = 5, CompanyId = 1, UserId = 5, IsCompanyAdmin = false, IsActive = true, IsDeleted = false, CreatedAtUtc = seedTime }
             );
 
             // --- ERP SİSTEMİ ---

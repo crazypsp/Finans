@@ -9,6 +9,9 @@ using Finans.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Serilog;
+using System.Runtime.Versioning;
+
+[assembly: SupportedOSPlatform("windows")]
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -43,6 +46,7 @@ try
 
     // Background workers
     builder.Services.AddHostedService<ConnectorHeartbeatWorker>();
+    builder.Services.AddHostedService<ErpAccountSyncWorker>();
     builder.Services.AddHostedService<ErpTransferWorker>();
 
     var host = builder.Build();

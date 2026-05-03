@@ -103,56 +103,39 @@ namespace Finans.Application.Services.Banking
             }
         }
 
-        private async Task<int> UpsertTransactionWithoutSaveAsync(
-    int companyId,
-    int bankId,
-    string accountNumber,
-    string? iban,
-    string? branchNo,
-    string? customerNo,
-    string? currency,
-    BankStatementRow row,
-    CancellationToken ct)
+        private static void AddTransactionWithoutSave(
+            FinansDbContext db,
+            int companyId,
+            int bankId,
+            string accountNumber,
+            string? iban,
+            string? branchNo,
+            string? customerNo,
+            string? currency,
+            BankStatementRow row)
         {
-            var existing = await _db.BankTransactions
-                .FirstOrDefaultAsync(x =>
-                    x.CompanyId == companyId &&
-                    x.ExternalUniqueKey == row.ExternalUniqueKey,
-                    ct);
-
-            if (existing == null)
+            db.BankTransactions.Add(new BankTransaction
             {
-                _db.BankTransactions.Add(new BankTransaction
-                {
-                    CompanyId = companyId,
-                    BankId = bankId,
-                    AccountNumber = accountNumber,
-                    Iban = iban,
-                    BranchNo = branchNo,
-                    CustomerNo = customerNo,
-                    TransactionDate = row.TransactionDate,
-                    Description = row.Description,
-                    Amount = row.Amount,
-                    Currency = string.IsNullOrWhiteSpace(row.Currency) ? (currency ?? "TRY") : row.Currency,
-                    DebitCredit = row.DebitCredit,
-                    ReferenceNumber = row.ReferenceNumber,
-                    BalanceAfterTransaction = row.BalanceAfter,
-                    ExternalUniqueKey = row.ExternalUniqueKey,
-                    IsMatched = false,
-                    IsTransferred = false,                   
-                    CreatedAtUtc = DateTime.UtcNow,
-                    IsDeleted = false
-                });
-
-                return 1;
-            }
-
-            existing.Description = row.Description ?? existing.Description;
-            existing.ReferenceNumber = row.ReferenceNumber ?? existing.ReferenceNumber;
-            existing.BalanceAfterTransaction = row.BalanceAfter ?? existing.BalanceAfterTransaction;
-            existing.UpdatedAtUtc = DateTime.UtcNow;
-
-            return 2;
+                CompanyId = companyId,
+                BankId = bankId,
+                AccountNumber = accountNumber,
+                Iban = iban,
+                BranchNo = branchNo,
+                CustomerNo = customerNo,
+                TransactionDate = row.TransactionDate,
+                Description = row.Description,
+                Amount = row.Amount,
+                Currency = string.IsNullOrWhiteSpace(row.Currency) ? (currency ?? "TRY") : row.Currency,
+                DebitCredit = row.DebitCredit,
+                ReferenceNumber = row.ReferenceNumber,
+                BalanceAfterTransaction = row.BalanceAfter,
+                ExternalTransactionId = row.ExternalTransactionId,
+                ExternalUniqueKey = row.ExternalUniqueKey,
+                IsMatched = false,
+                IsTransferred = false,
+                CreatedAtUtc = DateTime.UtcNow,
+                IsDeleted = false
+            });
         }
 
         private static BankStatementRequest BuildRequest(
@@ -238,7 +221,10 @@ namespace Finans.Application.Services.Banking
             var existing = await _db.BankTransactions
                 .FirstOrDefaultAsync(x =>
                     x.CompanyId == companyId &&
-                    x.ExternalUniqueKey == row.ExternalUniqueKey,
+                    x.BankId == bankId &&
+                    ((!string.IsNullOrWhiteSpace(row.ExternalTransactionId) &&
+                      x.ExternalTransactionId == row.ExternalTransactionId) ||
+                     x.ExternalUniqueKey == row.ExternalUniqueKey),
                     ct);
 
             if (existing == null)
@@ -258,6 +244,7 @@ namespace Finans.Application.Services.Banking
                     DebitCredit = row.DebitCredit,
                     ReferenceNumber = row.ReferenceNumber,
                     BalanceAfterTransaction = row.BalanceAfter,
+                    ExternalTransactionId = row.ExternalTransactionId,
                     ExternalUniqueKey = row.ExternalUniqueKey,
                     IsMatched = false,
                     IsTransferred = false,
@@ -270,13 +257,7 @@ namespace Finans.Application.Services.Banking
                 return 1; // inserted
             }
 
-            existing.Description = row.Description ?? existing.Description;
-            existing.ReferenceNumber = row.ReferenceNumber ?? existing.ReferenceNumber;
-            existing.BalanceAfterTransaction = row.BalanceAfter ?? existing.BalanceAfterTransaction;
-            existing.UpdatedAtUtc = DateTime.UtcNow;
-
-            await _db.SaveChangesAsync(ct);
-            return 2; // updated
+            return 0; // skipped
         }
 
         private async Task WritePayloadAsync(
@@ -433,14 +414,61 @@ namespace Finans.Application.Services.Banking
                 return;
             }
 
+            var externalIds = result.Rows
+                .Select(x => x.ExternalTransactionId)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var externalKeys = result.Rows
+                .Select(x => x.ExternalUniqueKey)
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var existingExternalIds = externalIds.Length == 0
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : (await _db.BankTransactions.AsNoTracking()
+                    .Where(x =>
+                        x.CompanyId == bank.CompanyId &&
+                        x.BankId == bank.Id &&
+                        x.ExternalTransactionId != null &&
+                        externalIds.Contains(x.ExternalTransactionId))
+                    .Select(x => x.ExternalTransactionId!)
+                    .ToListAsync(ct))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var existingExternalKeys = externalKeys.Length == 0
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : (await _db.BankTransactions.AsNoTracking()
+                    .Where(x =>
+                        x.CompanyId == bank.CompanyId &&
+                        x.BankId == bank.Id &&
+                        externalKeys.Contains(x.ExternalUniqueKey))
+                    .Select(x => x.ExternalUniqueKey)
+                    .ToListAsync(ct))
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             var insertedCount = 0;
-            var updatedCount = 0;
+            var skippedCount = 0;
 
             foreach (var row in result.Rows)
             {
                 ct.ThrowIfCancellationRequested();
 
-                var upsertResult = await UpsertTransactionWithoutSaveAsync(
+                var existsById = !string.IsNullOrWhiteSpace(row.ExternalTransactionId) &&
+                    existingExternalIds.Contains(row.ExternalTransactionId);
+                var existsByKey = existingExternalKeys.Contains(row.ExternalUniqueKey);
+
+                if (existsById || existsByKey)
+                {
+                    skippedCount++;
+                    continue;
+                }
+
+                AddTransactionWithoutSave(
+                    _db,
                     companyId: bank.CompanyId,
                     bankId: bank.Id,
                     accountNumber: account.AccountNumber,
@@ -448,11 +476,13 @@ namespace Finans.Application.Services.Banking
                     branchNo: account.BranchNo,
                     customerNo: account.CustomerNo,
                     currency: account.Currency,
-                    row: row,
-                    ct: ct);
+                    row: row);
 
-                if (upsertResult == 1) insertedCount++;
-                else if (upsertResult == 2) updatedCount++;
+                if (!string.IsNullOrWhiteSpace(row.ExternalTransactionId))
+                    existingExternalIds.Add(row.ExternalTransactionId);
+
+                existingExternalKeys.Add(row.ExternalUniqueKey);
+                insertedCount++;
             }
 
             _db.BankIntegrationLogs.Add(new BankIntegrationLog
@@ -462,7 +492,7 @@ namespace Finans.Application.Services.Banking
                 Status = "Success",
                 Level = Finans.Entities.Common.LogLevel.Info,
                 Operation = "StatementImport",
-                ErrorMessage = $"Inserted={insertedCount}, Updated={updatedCount}, TotalRows={result.Rows.Count}",
+                ErrorMessage = $"Inserted={insertedCount}, Skipped={skippedCount}, TotalRows={result.Rows.Count}",
                 OccurredAtUtc = DateTime.UtcNow,
                 CreatedAtUtc = DateTime.UtcNow,
                 IsDeleted = false

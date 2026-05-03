@@ -116,7 +116,10 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
         }
 
         private static string GetChild(XmlNode node, int index)
-            => node.ChildNodes.Count > index ? node.ChildNodes[index].InnerText : "";
+        {
+            var child = node.ChildNodes.Count > index ? node.ChildNodes[index] : null;
+            return child?.InnerText ?? "";
+        }
 
         private static DateTime? ParseYmd(string ymd)
         {

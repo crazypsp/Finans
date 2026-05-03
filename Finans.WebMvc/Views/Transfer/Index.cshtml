@@ -1,7 +1,9 @@
 @model Finans.Contracts.Transfer.TransferFilterDto
+@using Finans.WebMvc.Security
 @{
     var list = ViewBag.List as IReadOnlyList<Finans.Contracts.Transfer.TransferListItemDto>;
     var banks = ViewBag.Banks as IEnumerable<dynamic> ?? Enumerable.Empty<dynamic>();
+    var canTransfer = User.IsAdmin() || User.IsCompany() || User.IsAccountant();
 }
 
 <div class="page-header">
@@ -59,9 +61,12 @@
                 <span class="text-muted" style="font-size:.875rem;">@list.Count kayıt bulundu</span>
                 <span id="selectionCount" class="ms-2 badge bg-info" style="display:none;"></span>
             </div>
-            <button type="submit" class="btn btn-success btn-sm" onclick="return confirmBatch()">
-                <i class="bi bi-send me-1"></i>Seçilenleri Kuyruğa Gönder
-            </button>
+            @if (canTransfer)
+            {
+                <button type="submit" class="btn btn-success btn-sm" onclick="return confirmBatch()">
+                    <i class="bi bi-send me-1"></i>Seçilenleri Kuyruğa Gönder
+                </button>
+            }
         </div>
 
         <div class="table-container">
@@ -88,7 +93,7 @@
                         {
                             <tr>
                                 <td>
-                                    @if (!x.IsTransferred && string.IsNullOrWhiteSpace(x.TransferBatchNo))
+                                    @if (canTransfer && !x.IsTransferred && string.IsNullOrWhiteSpace(x.TransferBatchNo))
                                     {
                                         <input type="checkbox" name="selectedIds" value="@x.BankTransactionId" class="form-check-input rowCheck" />
                                     }
@@ -134,12 +139,24 @@
                                     }
                                 </td>
                                 <td>
-                                    @if (!x.IsTransferred && string.IsNullOrWhiteSpace(x.TransferBatchNo))
+                                    @if (canTransfer && !x.IsTransferred && string.IsNullOrWhiteSpace(x.TransferBatchNo))
                                     {
                                         <button type="button" class="btn btn-primary btn-sm btn-icon"
                                                 title="ERP'ye Aktar"
                                                 onclick="openTransferModal(@x.BankTransactionId, '@x.Description?.Replace("'", "\\'")?.Replace("\r","")?.Replace("\n","")', @x.Amount, '@x.Currency')">
                                             <i class="bi bi-box-arrow-right"></i>
+                                        </button>
+                                    }
+                                    else if (x.IsTransferred)
+                                    {
+                                        <button type="button" class="btn btn-outline-success btn-sm btn-icon" title="Aktarıldı" disabled>
+                                            <i class="bi bi-check2-circle"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-outline-warning btn-sm btn-icon" title="Aktarım kuyruğunda" disabled>
+                                            <i class="bi bi-hourglass-split"></i>
                                         </button>
                                     }
                                 </td>

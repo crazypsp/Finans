@@ -1,254 +1,236 @@
-//using Finans.Application.Abstractions.Banking;
-//using Finans.Application.Models.Banking;
-//using Finans.Infrastructure.Banking.Base;
-//using Finans.Infrastructure.Banking.Legacy;
-//using System.Globalization;
-//using System.Net.Http;
-//using System.Net.Http.Headers;
-//using System.Text;
-//using System.Xml.Linq;
+using System.Globalization;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Xml.Linq;
+using Finans.Application.Abstractions.Banking;
+using Finans.Application.Models.Banking;
+using Finans.Infrastructure.Banking.Base;
+using Finans.Infrastructure.Banking.Legacy;
 
-//namespace Finans.Infrastructure.Banking.Managers.BankProviders
-//{
-//    /// <summary>
-//    /// QNB Finansbank - MaestroCoreEkstre / TeknikBaglantiService SOAP entegrasyonu
-//    /// WSDL: https://fbmaestro.qnb.com.tr/MaestroCoreEkstre/services/TeknikBaglantiService?wsdl
-//    /// </summary>
-//    public sealed class QnbMaestroStatementProvider : IBankProvider
-//    {
-//        // WSDL içinde SOAP11 address "http://fbmaestro.qnb.com.tr:9086/..." olarak geliyor.
-//        private const string DefaultSoap11Endpoint =
-//            "http://fbmaestro.qnb.com.tr:9086/MaestroCoreEkstre/services/TeknikBaglantiService.TeknikBaglantiServiceHttpSoap11Endpoint/";
+namespace Finans.Infrastructure.Banking.Managers.BankProviders
+{
+    public sealed class QnbMaestroStatementProvider : IBankProvider
+    {
+        private const string DefaultSoap11Endpoint =
+            "http://fbmaestro.qnb.com.tr:9086/MaestroCoreEkstre/services/TeknikBaglantiService.TeknikBaglantiServiceHttpSoap11Endpoint/";
 
-//        public int BankId => BankIds.QnbFinans;
-//        public string BankCode => "QNB";
-//        public string ProviderCode => "QnbMaestroStatementProvider";
+        public int BankId => BankIds.QnbFinans;
+        public string BankCode => "QNB";
+        public string ProviderCode => "QnbMaestroStatementProvider";
+        public IReadOnlyCollection<string> ProviderAliases { get; } = new[] { "QNB", "QNB_FINANS" };
 
-//        private readonly IHttpClientFactory _httpFactory;
+        private readonly IHttpClientFactory _httpFactory;
 
-//        public QnbMaestroStatementProvider(IHttpClientFactory httpFactory)
-//        {
-//            _httpFactory = httpFactory;
-//        }
+        public QnbMaestroStatementProvider(IHttpClientFactory httpFactory)
+        {
+            _httpFactory = httpFactory;
+        }
 
-//        public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
-//        {
-//            if (string.IsNullOrWhiteSpace(request.Username))
-//                throw new ArgumentException("QNB için Username zorunlu.");
-//            if (string.IsNullOrWhiteSpace(request.Password))
-//                throw new ArgumentException("QNB için Password zorunlu.");
-//            if (string.IsNullOrWhiteSpace(request.AccountNumber))
-//                throw new ArgumentException("QNB için AccountNumber zorunlu.");
+        public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(request.Username))
+                throw new ArgumentException("QNB icin Username zorunlu.");
+            if (string.IsNullOrWhiteSpace(request.Password))
+                throw new ArgumentException("QNB icin Password zorunlu.");
+            if (string.IsNullOrWhiteSpace(request.AccountNumber))
+                throw new ArgumentException("QNB icin AccountNumber zorunlu.");
 
-//            var endpoint = string.IsNullOrWhiteSpace(request.Link) ? DefaultSoap11Endpoint : request.Link.Trim();
+            var endpoint = ResolveEndpoint(request.Link);
+            var soapXml = BuildSoapEnvelope(
+                request.Username,
+                request.Password,
+                request.AccountNumber,
+                request.StartDate,
+                request.EndDate,
+                request.GetExtra("iban"));
 
-//            // iban opsiyonel (istersen Extras içine "iban" koyarsın)
-//            var iban = request.GetExtra("iban"); // yoksa null
+            var http = _httpFactory.CreateClient(nameof(QnbMaestroStatementProvider));
+            http.Timeout = TimeSpan.FromSeconds(90);
 
-//            var soapXml = BuildSoapEnvelope(
-//                userName: request.Username,
-//                password: request.Password,
-//                accountNo: request.AccountNumber,
-//                start: request.StartDate,
-//                end: request.EndDate,
-//                iban: iban
-//            );
+            using var msg = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            msg.Headers.TryAddWithoutValidation("SOAPAction", "\"urn:getTransactionInfo\"");
+            msg.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/xml"));
+            msg.Content = new StringContent(soapXml, Encoding.UTF8, "text/xml");
 
-//            var http = _httpFactory.CreateClient();
-//            http.Timeout = TimeSpan.FromSeconds(90);
+            using var resp = await http.SendAsync(msg, ct).ConfigureAwait(false);
+            var respText = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
-//            using var msg = new HttpRequestMessage(HttpMethod.Post, endpoint);
-//            msg.Headers.TryAddWithoutValidation("SOAPAction", "\"urn:getTransactionInfo\"");
-//            msg.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/xml"));
+            if (!resp.IsSuccessStatusCode)
+                throw new Exception($"QNB servis HTTP {(int)resp.StatusCode}: {SafePreview(respText)}");
 
-//            msg.Content = new StringContent(soapXml, Encoding.UTF8, "text/xml");
+            return ParseResponseToRows(respText, request);
+        }
 
-//            using var resp = await http.SendAsync(msg, ct).ConfigureAwait(false);
-//            var respText = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        private static string ResolveEndpoint(string? link)
+        {
+            if (string.IsNullOrWhiteSpace(link))
+                return DefaultSoap11Endpoint;
 
-//            if (!resp.IsSuccessStatusCode)
-//                throw new Exception($"QNB servis HTTP {(int)resp.StatusCode}: {SafePreview(respText)}");
+            var endpoint = link.Trim();
+            var wsdlIndex = endpoint.IndexOf("?wsdl", StringComparison.OrdinalIgnoreCase);
+            if (wsdlIndex >= 0)
+                endpoint = endpoint[..wsdlIndex];
 
-//            return ParseResponseToBnkhar(respText, request);
-//        }
+            return endpoint.EndsWith("/", StringComparison.Ordinal)
+                ? endpoint
+                : endpoint + "/";
+        }
 
-//        private static string BuildSoapEnvelope(
-//            string userName,
-//            string password,
-//            string accountNo,
-//            DateTime start,
-//            DateTime end,
-//            string? iban)
-//        {
-//            // WSDL’de kompleks tiplerin elementleri elementFormDefault="unqualified".
-//            // Bu yüzden iç alanları (userName/password/accountNo/...) prefixsiz göndermek daha uyumludur.
-//            XNamespace soap = "http://schemas.xmlsoap.org/soap/envelope/";
-//            XNamespace ns = "http://teknikbaglantiekstre.genericekstrenew2.driver.maestro.ibtech.com";
+        private static string BuildSoapEnvelope(
+            string userName,
+            string password,
+            string accountNo,
+            DateTime start,
+            DateTime end,
+            string? iban)
+        {
+            XNamespace soap = "http://schemas.xmlsoap.org/soap/envelope/";
+            XNamespace ns = "http://teknikbaglantiekstre.genericekstrenew2.driver.maestro.ibtech.com";
 
-//            var body =
-//                new XElement(ns + "getTransactionInfo",
-//                    new XElement("transactionInfo",
-//                        new XElement("password", password),
-//                        new XElement("transactionInfoInputType",
-//                            new XElement("accountNo", accountNo),
-//                            new XElement("startDate", start.ToString("o", CultureInfo.InvariantCulture)),
-//                            new XElement("endDate", end.ToString("o", CultureInfo.InvariantCulture)),
-//                            string.IsNullOrWhiteSpace(iban) ? null : new XElement("iban", iban)
-//                        ),
-//                        new XElement("userName", userName)
-//                    )
-//                );
+            var body =
+                new XElement(ns + "getTransactionInfo",
+                    new XElement("transactionInfo",
+                        new XElement("password", password),
+                        new XElement("transactionInfoInputType",
+                            new XElement("accountNo", accountNo),
+                            new XElement("startDate", start.ToString("o", CultureInfo.InvariantCulture)),
+                            new XElement("endDate", end.ToString("o", CultureInfo.InvariantCulture)),
+                            string.IsNullOrWhiteSpace(iban) ? null : new XElement("iban", iban)
+                        ),
+                        new XElement("userName", userName)
+                    )
+                );
 
-//            var doc =
-//                new XDocument(
-//                    new XDeclaration("1.0", "utf-8", null),
-//                    new XElement(soap + "Envelope",
-//                        new XAttribute(XNamespace.Xmlns + "soapenv", soap),
-//                        new XAttribute(XNamespace.Xmlns + "ns", ns),
-//                        new XElement(soap + "Header"),
-//                        new XElement(soap + "Body", body)
-//                    )
-//                );
+            var doc =
+                new XDocument(
+                    new XDeclaration("1.0", "utf-8", null),
+                    new XElement(soap + "Envelope",
+                        new XAttribute(XNamespace.Xmlns + "soapenv", soap),
+                        new XAttribute(XNamespace.Xmlns + "ns", ns),
+                        new XElement(soap + "Header"),
+                        new XElement(soap + "Body", body)
+                    )
+                );
 
-//            return doc.ToString(SaveOptions.DisableFormatting);
-//        }
+            return doc.ToString(SaveOptions.DisableFormatting);
+        }
 
-//        private static IReadOnlyList<LegacyBankRow> ParseResponseToBnkhar(string xml, BankStatementRequest request)
-//        {
-//            var doc = XDocument.Parse(xml);
+        private static BankStatementResult ParseResponseToRows(string xml, BankStatementRequest request)
+        {
+            var doc = XDocument.Parse(xml);
 
-//            // SOAP Fault kontrolü
-//            var fault = doc.Descendants().FirstOrDefault(x => x.Name.LocalName.Equals("Fault", StringComparison.OrdinalIgnoreCase));
-//            if (fault != null)
-//            {
-//                var faultString =
-//                    fault.Descendants().FirstOrDefault(x => x.Name.LocalName.Equals("faultstring", StringComparison.OrdinalIgnoreCase))?.Value
-//                    ?? fault.Value;
-//                throw new Exception($"QNB SOAP Fault: {SafePreview(faultString)}");
-//            }
+            var fault = doc.Descendants()
+                .FirstOrDefault(x => x.Name.LocalName.Equals("Fault", StringComparison.OrdinalIgnoreCase));
+            if (fault != null)
+            {
+                var faultString =
+                    fault.Descendants().FirstOrDefault(x => x.Name.LocalName.Equals("faultstring", StringComparison.OrdinalIgnoreCase))?.Value
+                    ?? fault.Value;
+                throw new Exception($"QNB SOAP Fault: {SafePreview(faultString)}");
+            }
 
-//            // <return> içinde hata alanları var
-//            var ret = doc.Descendants().FirstOrDefault(x => x.Name.LocalName == "return");
-//            if (ret == null) return LegacyBankRowMapper.ToResult(Array.Empty<LegacyBankRow>());
+            var ret = doc.Descendants().FirstOrDefault(x => x.Name.LocalName == "return");
+            if (ret == null)
+                return LegacyBankRowMapper.ToResult(Array.Empty<LegacyBankRow>(), xml);
 
-//            var errorCode = GetVal(ret, "errorCode");
-//            var errorDesc = GetVal(ret, "errorDescription");
+            var errorCode = GetVal(ret, "errorCode");
+            var errorDesc = GetVal(ret, "errorDescription");
+            if (!string.IsNullOrWhiteSpace(errorCode) && errorCode != "0")
+                throw new Exception($"QNB hata. Code={errorCode} Desc={errorDesc}");
 
-//            // Bazı servisler "0" veya boş döner, bazıları null; burada dolu ve 0 değilse hata sayalım
-//            if (!string.IsNullOrWhiteSpace(errorCode) && errorCode != "0")
-//                throw new Exception($"QNB hata. Code={errorCode} Desc={errorDesc}");
+            var list = new List<LegacyBankRow>();
+            var accountInfos = ret.Descendants().Where(x => x.Name.LocalName == "accountInfos");
 
-//            var list = new List<LegacyBankRow>();
+            foreach (var acc in accountInfos)
+            {
+                var accNo = GetVal(acc, "accountNo");
+                var customerNo = GetVal(acc, "customerNo");
+                var branchCode = GetVal(acc, "branchCode");
+                var accCurrency = GetVal(acc, "accountCurrencyCode");
+                var accountIban = GetVal(acc, "iban");
 
-//            // accountInfos (maxOccurs unbounded)
-//            var accountInfos = ret.Descendants().Where(x => x.Name.LocalName == "accountInfos");
-//            foreach (var acc in accountInfos)
-//            {
-//                var accNo = GetVal(acc, "accountNo");
-//                var customerNo = GetVal(acc, "customerNo");
-//                var branchCode = GetVal(acc, "branchCode");
-//                var accCurrency = GetVal(acc, "accountCurrencyCode");
-//                var iban = GetVal(acc, "iban");
+                foreach (var trx in acc.Descendants().Where(x => x.Name.LocalName == "transactions"))
+                {
+                    var trxId = GetVal(trx, "transactionId");
+                    var order = GetVal(trx, "statementTransactionOrder");
+                    var processId = FirstNonEmpty(trxId, order);
 
-//                // transactions (maxOccurs unbounded)
-//                var transactions = acc.Descendants().Where(x => x.Name.LocalName == "transactions");
-//                foreach (var trx in transactions)
-//                {
-//                    var trxId = GetVal(trx, "transactionId");
-//                    var order = GetVal(trx, "statementTransactionOrder");
-//                    var pid = !string.IsNullOrWhiteSpace(trxId) ? trxId : order;
+                    var trxDateStr = GetVal(trx, "transactionDate");
+                    var dt = ParseDate(trxDateStr);
 
-//                    var trxDateStr = GetVal(trx, "transactionDate");
-//                    var dt = ParseDate(trxDateStr);
+                    var refNo =
+                        FirstNonEmpty(
+                            GetVal(trx, "eftInquiryNumber"),
+                            GetVal(trx, "ddReferenceNumber"),
+                            GetVal(trx, "ddFirmReferenceNumber"),
+                            GetVal(trx, "productOperationRefNo"),
+                            processId);
 
-//                    var debitCredit = GetVal(trx, "debitOrCreditCode");
-//                    var dcMapped = MapDebitCredit(debitCredit);
+                    list.Add(new LegacyBankRow
+                    {
+                        BNKCODE = "QNB",
+                        HESAPNO = string.IsNullOrWhiteSpace(accNo) ? request.AccountNumber : accNo,
+                        URF = customerNo,
+                        SUBECODE = branchCode,
+                        CURRENCYCODE = FirstNonEmpty(GetVal(trx, "currencyCode"), accCurrency),
 
-//                    var amount = GetVal(trx, "transactionAmount");
-//                    var balance = GetVal(trx, "transactionBalance");
-//                    var desc = GetVal(trx, "transactionDescription");
+                        PROCESSID = processId,
+                        PROCESSTIMESTR = trxDateStr,
+                        PROCESSTIMESTR2 = trxDateStr,
+                        PROCESSTIME = dt,
+                        PROCESSTIME2 = dt,
 
-//                    var opponentIban = GetVal(trx, "opponentIBAN");
-//                    var opponentTax = GetVal(trx, "opponentTAXNoPIDNo");
+                        PROCESSAMAOUNT = GetVal(trx, "transactionAmount"),
+                        PROCESSBALANCE = GetVal(trx, "transactionBalance"),
+                        PROCESSDESC = GetVal(trx, "transactionDescription"),
+                        PROCESSDEBORCRED = MapDebitCredit(GetVal(trx, "debitOrCreditCode")),
 
-//                    var refNo =
-//                        FirstNonEmpty(
-//                            GetVal(trx, "eftInquiryNumber"),
-//                            GetVal(trx, "ddReferenceNumber"),
-//                            GetVal(trx, "ddFirmReferenceNumber"),
-//                            GetVal(trx, "productOperationRefNo"),
-//                            pid
-//                        );
+                        PROCESSREFNO = refNo,
+                        PROCESSIBAN = GetVal(trx, "opponentIBAN"),
+                        PROCESSVKN = GetVal(trx, "opponentTAXNoPIDNo"),
+                        FRMIBAN = accountIban,
+                        Durum = 0
+                    });
+                }
+            }
 
-//                    list.Add(new LegacyBankRow
-//                    {
-//                        BNKCODE = "QNB",
-//                        HESAPNO = string.IsNullOrWhiteSpace(accNo) ? request.AccountNumber : accNo,
-//                        URF = customerNo,
-//                        SUBECODE = branchCode,
-//                        CURRENCYCODE = FirstNonEmpty(GetVal(trx, "currencyCode"), accCurrency),
+            return LegacyBankRowMapper.ToResult(list, xml);
+        }
 
-//                        PROCESSID = pid,
-//                        PROCESSTIMESTR = trxDateStr,
-//                        PROCESSTIMESTR2 = trxDateStr,
-//                        PROCESSTIME = dt,
-//                        PROCESSTIME2 = dt,
+        private static string GetVal(XElement parent, string localName)
+            => parent.Elements().FirstOrDefault(e => e.Name.LocalName == localName)?.Value?.Trim() ?? "";
 
-//                        PROCESSAMAOUNT = amount,
-//                        PROCESSBALANCE = balance,
-//                        PROCESSDESC = desc,
-//                        PROCESSDEBORCRED = dcMapped,
+        private static DateTime? ParseDate(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s))
+                return null;
 
-//                        PROCESSREFNO = refNo,
-//                        PROCESSIBAN = opponentIban,
-//                        PROCESSVKN = opponentTax,
+            if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
+                return dt;
 
-//                        FRMIBAN = iban,
-//                        Durum = 0
-//                    });
-//                }
-//            }
+            return DateTime.TryParse(s, CultureInfo.GetCultureInfo("tr-TR"), DateTimeStyles.AssumeLocal, out dt)
+                ? dt
+                : null;
+        }
 
-//            return LegacyBankRowMapper.ToResult(list);
-//        }
+        private static string MapDebitCredit(string code)
+        {
+            var value = (code ?? string.Empty).Trim().ToUpperInvariant();
+            if (value.Contains('C') || value == "+")
+                return "A";
+            if (value.Contains('D') || value == "-")
+                return "B";
 
-//        private static string GetVal(XElement parent, string localName)
-//            => parent.Elements().FirstOrDefault(e => e.Name.LocalName == localName)?.Value?.Trim() ?? "";
+            return string.IsNullOrWhiteSpace(code) ? "A" : code;
+        }
 
-//        private static DateTime? ParseDate(string s)
-//        {
-//            if (string.IsNullOrWhiteSpace(s)) return null;
+        private static string FirstNonEmpty(params string?[] values)
+            => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim() ?? "";
 
-//            if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
-//                return dt;
-
-//            if (DateTime.TryParse(s, out dt))
-//                return dt;
-
-//            return null;
-//        }
-
-//        private static string MapDebitCredit(string code)
-//        {
-//            // Mevcut sisteminde "A" alacak, "B" borç gibi kullanıyordun.
-//            // QNB’de genelde "C/D" veya benzeri gelebilir.
-//            if (string.IsNullOrWhiteSpace(code)) return "";
-
-//            var c = code.Trim().ToUpperInvariant();
-//            if (c.Contains("C") || c == "+") return "A"; // Credit/Alacak
-//            if (c.Contains("D") || c == "-") return "B"; // Debit/Borç
-
-//            return code; // bilinmiyorsa olduğu gibi
-//        }
-
-//        private static string FirstNonEmpty(params string?[] values)
-//            => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v))?.Trim() ?? "";
-
-//        private static string SafePreview(string? s)
-//        {
-//            s ??= "";
-//            s = s.Trim();
-//            return s.Length <= 600 ? s : s[..600];
-//        }
-//    }
-//}
+        private static string SafePreview(string? value)
+        {
+            value = (value ?? string.Empty).Trim();
+            return value.Length <= 600 ? value : value[..600];
+        }
+    }
+}

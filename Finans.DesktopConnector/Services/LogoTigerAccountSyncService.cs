@@ -4,9 +4,11 @@ using Finans.Entities.ERP;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Runtime.Versioning;
 
 namespace Finans.DesktopConnector.Services
 {
+    [SupportedOSPlatform("windows")]
     public sealed class LogoTigerAccountSyncService : IErpAccountSyncService
     {
         private readonly FinansDbContext _db;

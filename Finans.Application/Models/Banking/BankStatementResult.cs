@@ -22,6 +22,7 @@ namespace Finans.Application.Models.Banking
 
     public sealed class BankStatementRow
     {
+        public string? ExternalTransactionId { get; set; }
         public string ExternalUniqueKey { get; set; } = null!;
         public DateTime TransactionDate { get; set; }
         public string? Description { get; set; }

@@ -24,7 +24,11 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure();
 
 builder.Services.AddHostedService<BankImportWorker>();
-builder.Services.AddHostedService<ErpTransferWorker>();
+
+if (builder.Configuration.GetValue<bool>("Worker:EnableErpTransferWorker", false))
+{
+    builder.Services.AddHostedService<ErpTransferWorker>();
+}
 
 var host = builder.Build();
 await host.Services.InitializeFinansDbAsync();

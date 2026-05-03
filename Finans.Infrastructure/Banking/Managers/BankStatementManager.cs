@@ -39,7 +39,7 @@ namespace Finans.Infrastructure.Banking.Managers
             if (!raw.IsSuccess)
                 return raw;
 
-            Normalize(raw.Rows, request.AccountNumber);
+            Normalize(raw.Rows, request);
             raw.Rows = Deduplicate(raw.Rows)
                 .OrderByDescending(x => x.TransactionDate)
                 .ThenByDescending(x => x.ReferenceNumber)
@@ -58,19 +58,23 @@ namespace Finans.Infrastructure.Banking.Managers
             if (r.EndDate < r.StartDate) throw new ArgumentException("EndDate < StartDate olamaz");
         }
 
-        private static void Normalize(List<BankStatementRow> rows, string accountNo)
+        private static void Normalize(List<BankStatementRow> rows, BankStatementRequest request)
         {
             foreach (var r in rows)
             {
-                r.AccountNumber ??= accountNo;
+                r.AccountNumber ??= request.AccountNumber;
                 r.Description ??= "";
                 r.Currency = string.IsNullOrWhiteSpace(r.Currency) ? "TRY" : r.Currency;
                 r.DebitCredit = r.DebitCredit is "C" or "D"
                     ? r.DebitCredit
                     : (r.Amount >= 0 ? "C" : "D");
 
-                if (string.IsNullOrWhiteSpace(r.ExternalUniqueKey))
-                    r.ExternalUniqueKey = HashRow(r);
+                r.ExternalTransactionId = NormalizeExternalTransactionId(FirstNonWhiteSpace(
+                    r.ExternalTransactionId,
+                    r.ExternalUniqueKey,
+                    r.ReferenceNumber));
+
+                r.ExternalUniqueKey = BuildStableUniqueKey(request, r);
             }
         }
 
@@ -105,6 +109,40 @@ namespace Finans.Infrastructure.Banking.Managers
 
             using var sha = SHA256.Create();
             return Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(raw)));
+        }
+
+        private static string BuildStableUniqueKey(BankStatementRequest request, BankStatementRow row)
+        {
+            var sourceId = FirstNonWhiteSpace(row.ExternalTransactionId, row.ReferenceNumber);
+            sourceId ??= $"HASH:{HashRow(row)}";
+
+            var raw = string.Join("|", new[]
+            {
+                request.CompanyId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                request.BankId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                request.ProviderCode.Trim(),
+                (row.AccountNumber ?? request.AccountNumber).Trim(),
+                sourceId.Trim()
+            });
+
+            using var sha = SHA256.Create();
+            return Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(raw)));
+        }
+
+        private static string? FirstNonWhiteSpace(params string?[] values)
+            => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+        private static string? NormalizeExternalTransactionId(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            value = value.Trim();
+            if (value.Length <= 128)
+                return value;
+
+            using var sha = SHA256.Create();
+            return "HASH:" + Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(value)));
         }
     }
 }

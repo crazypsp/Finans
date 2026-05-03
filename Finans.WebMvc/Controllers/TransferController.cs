@@ -70,6 +70,12 @@ namespace Finans.WebMvc.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateBatch([FromForm] List<int> selectedIds, CancellationToken ct)
         {
+            if (!CanCreateTransfer())
+            {
+                TempData["Err"] = "Bu kullanıcı aktarım yapma yetkisine sahip değil.";
+                return RedirectToAction(nameof(Index));
+            }
+
             if (selectedIds == null || selectedIds.Count == 0)
             {
                 TempData["Err"] = "Aktarım için kayıt seçmelisin.";
@@ -137,6 +143,12 @@ namespace Finans.WebMvc.Controllers
             [FromForm] string bankAccountCode,
             CancellationToken ct)
         {
+            if (!CanCreateTransfer())
+            {
+                TempData["Err"] = "Bu kullanıcı aktarım yapma yetkisine sahip değil.";
+                return RedirectToAction(nameof(Index));
+            }
+
             var companyId = User.GetCompanyId();
 
             var req = new CreateTransferBatchRequestDto
@@ -162,5 +174,8 @@ namespace Finans.WebMvc.Controllers
 
             return RedirectToAction(nameof(Index));
         }
+
+        private bool CanCreateTransfer()
+            => User.IsAdmin() || User.IsCompany() || User.IsAccountant();
     }
 }

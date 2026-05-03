@@ -106,6 +106,22 @@ namespace Finans.Application.Services.Transfer
                     continue;
                 }
 
+                if (transaction.IsTransferred)
+                {
+                    item.Status = "Success";
+                    item.VoucherNo = transaction.ErpVoucherNo;
+                    item.ResultMessage = "BankTransaction daha önce aktarılmış.";
+                    item.TransferredAtUtc = transaction.TransferredAtUtc ?? DateTime.UtcNow;
+                    item.UpdatedAtUtc = DateTime.UtcNow;
+
+                    batch.SuccessCount += 1;
+                    batch.Status = CalculateBatchStatus(batch.TotalCount, batch.SuccessCount, batch.FailedCount);
+                    batch.UpdatedAtUtc = DateTime.UtcNow;
+
+                    await _db.SaveChangesAsync(ct);
+                    continue;
+                }
+
                 try
                 {
                     var resolvedCodes = await _erpCodeResolver.ResolveAsync(transaction, ct);
@@ -144,11 +160,13 @@ namespace Finans.Application.Services.Transfer
                     if (result.IsSuccess)
                     {
                         item.Status = "Success";
+                        item.VoucherNo = result.VoucherNo;
                         item.ResultMessage = result.Message;
                         item.TransferredAtUtc = DateTime.UtcNow;
                         item.UpdatedAtUtc = DateTime.UtcNow;
 
                         transaction.IsTransferred = true;
+                        transaction.TransferredAtUtc = item.TransferredAtUtc;
                         transaction.ErpVoucherNo = result.VoucherNo;
                         transaction.ErpResultMessage = result.Message;
                         transaction.UpdatedAtUtc = DateTime.UtcNow;
