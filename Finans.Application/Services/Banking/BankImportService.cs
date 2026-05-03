@@ -80,11 +80,30 @@ namespace Finans.Application.Services.Banking
             {
                 ct.ThrowIfCancellationRequested();
 
-                await ImportSingleAccountAsync(
-                    target.Bank,
-                    target.Account,
-                    target.Credential,
-                    ct);
+                try
+                {
+                    await ImportSingleAccountAsync(
+                        target.Bank,
+                        target.Account,
+                        target.Credential,
+                        ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _db.ChangeTracker.Clear();
+                    await WriteIntegrationLogAsync(
+                        target.Bank.CompanyId,
+                        target.Bank.Id,
+                        "Exception",
+                        Finans.Entities.Common.LogLevel.Error,
+                        "StatementImport",
+                        $"Provider={target.Bank.ProviderCode}, Account={target.Account.AccountNumber}: {ex.Message}",
+                        ct);
+                }
             }
 
             // Import sonrası otomatik eşleştirme
@@ -414,41 +433,28 @@ namespace Finans.Application.Services.Banking
                 return;
             }
 
-            var externalIds = result.Rows
+            var existingRows = await _db.BankTransactions.AsNoTracking()
+                .Where(x =>
+                    x.CompanyId == bank.CompanyId &&
+                    x.BankId == bank.Id &&
+                    x.AccountNumber == account.AccountNumber)
+                .Select(x => new
+                {
+                    x.ExternalTransactionId,
+                    x.ExternalUniqueKey
+                })
+                .ToListAsync(ct);
+
+            var existingExternalIds = existingRows
                 .Select(x => x.ExternalTransactionId)
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Select(x => x!)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            var externalKeys = result.Rows
+            var existingExternalKeys = existingRows
                 .Select(x => x.ExternalUniqueKey)
                 .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            var existingExternalIds = externalIds.Length == 0
-                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                : (await _db.BankTransactions.AsNoTracking()
-                    .Where(x =>
-                        x.CompanyId == bank.CompanyId &&
-                        x.BankId == bank.Id &&
-                        x.ExternalTransactionId != null &&
-                        externalIds.Contains(x.ExternalTransactionId))
-                    .Select(x => x.ExternalTransactionId!)
-                    .ToListAsync(ct))
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var existingExternalKeys = externalKeys.Length == 0
-                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                : (await _db.BankTransactions.AsNoTracking()
-                    .Where(x =>
-                        x.CompanyId == bank.CompanyId &&
-                        x.BankId == bank.Id &&
-                        externalKeys.Contains(x.ExternalUniqueKey))
-                    .Select(x => x.ExternalUniqueKey)
-                    .ToListAsync(ct))
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var insertedCount = 0;
             var skippedCount = 0;

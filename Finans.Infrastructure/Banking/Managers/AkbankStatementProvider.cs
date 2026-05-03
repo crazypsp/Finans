@@ -33,6 +33,8 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
 
             try
             {
+                var urf = request.GetExtra("urf") ?? request.GetExtra("customerNo") ?? string.Empty;
+
                 // Eğer Akbank HTTP Basic auth istiyorsa (emin değiliz ama stabil dursun):
                 if (!string.IsNullOrWhiteSpace(request.Username))
                 {
@@ -49,7 +51,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
                     var bitTarih = day.ToString("yyyyMMdd") + "230000000000";
 
                     XmlNode xml = await client.GetExtreWithParamsAsync(
-                        urf: "",
+                        urf: urf,
                         hesapNo: request.AccountNumber,
                         dovizKodu: "",
                         subeKodu: "",

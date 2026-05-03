@@ -67,9 +67,9 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
                 return DefaultSoap11Endpoint;
 
             var endpoint = link.Trim();
-            var wsdlIndex = endpoint.IndexOf("?wsdl", StringComparison.OrdinalIgnoreCase);
-            if (wsdlIndex >= 0)
-                endpoint = endpoint[..wsdlIndex];
+            if (endpoint.Contains("?wsdl", StringComparison.OrdinalIgnoreCase) ||
+                endpoint.EndsWith("/TeknikBaglantiService", StringComparison.OrdinalIgnoreCase))
+                return DefaultSoap11Endpoint;
 
             return endpoint.EndsWith("/", StringComparison.Ordinal)
                 ? endpoint
