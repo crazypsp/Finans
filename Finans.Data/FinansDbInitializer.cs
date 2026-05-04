@@ -603,7 +603,6 @@ namespace Finans.Data
         {
             var bankSeeds = new[]
             {
-                new BankSeed("DUMMY", "Demo/Dummy Banka", 0, false, false, true, null, null),
                 new BankSeed("ALB", "Albaraka Türk", 1, false, false, true, null, null),
                 new BankSeed("AKB", "Akbank", 3, false, false, true, null, null),
                 new BankSeed("ANB", "Anadolubank", 4, false, false, true, null, null),
@@ -658,70 +657,44 @@ namespace Finans.Data
 
             await db.SaveChangesAsync(ct);
 
-            var dummyBank = await db.Banks.IgnoreQueryFilters()
-                .FirstAsync(x => x.CompanyId == company.Id && x.ProviderCode == "DUMMY", ct);
-
-            var dummyAccount = await db.BankAccounts.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(x =>
-                    x.CompanyId == company.Id &&
-                    x.BankId == dummyBank.Id &&
-                    x.AccountNumber == "DUMMY-001",
-                    ct);
-
-            if (dummyAccount == null)
-            {
-                db.BankAccounts.Add(new BankAccount
-                {
-                    CompanyId = company.Id,
-                    BankId = dummyBank.Id,
-                    AccountNumber = "DUMMY-001",
-                    Currency = "TRY",
-                    IsActive = true,
-                    IsDeleted = false,
-                    CreatedAtUtc = SeedTime
-                });
-            }
-            else
-            {
-                dummyAccount.Currency = "TRY";
-                dummyAccount.IsActive = true;
-                dummyAccount.IsDeleted = false;
-            }
-
-            var dummyCredential = await db.BankCredentials.IgnoreQueryFilters()
-                .FirstOrDefaultAsync(x =>
-                    x.CompanyId == company.Id &&
-                    x.BankId == dummyBank.Id &&
-                    x.Username == "dummy",
-                    ct);
-
-            if (dummyCredential == null)
-            {
-                db.BankCredentials.Add(new BankCredential
-                {
-                    CompanyId = company.Id,
-                    BankId = dummyBank.Id,
-                    Username = "dummy",
-                    Password = "dummy",
-                    SecretEncrypted = "dummy",
-                    Technology = IntegrationTechnology.Api,
-                    AuthenticationMethod = AuthMethod.Basic,
-                    IsActive = true,
-                    IsDeleted = false,
-                    CreatedAtUtc = SeedTime
-                });
-            }
-            else
-            {
-                dummyCredential.Password = "dummy";
-                dummyCredential.SecretEncrypted = "dummy";
-                dummyCredential.Technology = IntegrationTechnology.Api;
-                dummyCredential.AuthenticationMethod = AuthMethod.Basic;
-                dummyCredential.IsActive = true;
-                dummyCredential.IsDeleted = false;
-            }
-
+            await DeactivateBankAsync(db, company.Id, "DUMMY", ct);
             await db.SaveChangesAsync(ct);
+        }
+
+        private static async Task DeactivateBankAsync(
+            FinansDbContext db,
+            int companyId,
+            string providerCode,
+            CancellationToken ct)
+        {
+            var bank = await db.Banks.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.CompanyId == companyId && x.ProviderCode == providerCode, ct);
+
+            if (bank == null)
+                return;
+
+            bank.IsActive = false;
+            bank.IsDeleted = true;
+
+            var accounts = await db.BankAccounts.IgnoreQueryFilters()
+                .Where(x => x.CompanyId == companyId && x.BankId == bank.Id)
+                .ToListAsync(ct);
+
+            foreach (var account in accounts)
+            {
+                account.IsActive = false;
+                account.IsDeleted = true;
+            }
+
+            var credentials = await db.BankCredentials.IgnoreQueryFilters()
+                .Where(x => x.CompanyId == companyId && x.BankId == bank.Id)
+                .ToListAsync(ct);
+
+            foreach (var credential in credentials)
+            {
+                credential.IsActive = false;
+                credential.IsDeleted = true;
+            }
         }
 
         private static IReadOnlyList<MenuSeed> MenuSeeds() => new[]

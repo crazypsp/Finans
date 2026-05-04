@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.ServiceModel;
 using System.Xml;
 using System.Xml.Linq;
 using Finans.Application.Abstractions.Banking;
@@ -13,7 +14,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
     public sealed class SekerbankStatementProvider : IBankProvider
     {
         private const string DefaultEndpoint =
-            "https://nakityonetimi.sekerbank.com.tr/SekerbankNakitYonetimiWebservisleri/CashManagement.asmx";
+            "http://nakityonetimi.sekerbank.com.tr/SekerbankNakitYonetimiWebservisleri/CashManagement.asmx";
 
         public int BankId => BankIds.Sekerbank;
         public string BankCode => "SKR";
@@ -33,12 +34,12 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
             if (string.IsNullOrWhiteSpace(customerNo))
                 throw new ArgumentException("Sekerbank icin customerNo zorunlu.");
 
-            var endpoint = string.IsNullOrWhiteSpace(request.Link) ? DefaultEndpoint : request.Link.Trim();
+            var endpoint = ResolveEndpoint(request.Link);
             var dateFormat = request.GetExtra("dateFormat") ?? "yyyyMMdd";
 
             var client = new SekerbankNakitYonetimiServisleriSoapClient(
-                SekerbankNakitYonetimiServisleriSoapClient.EndpointConfiguration.SekerbankNakitYonetimiServisleriSoap,
-                endpoint);
+                CreateBinding(endpoint),
+                new EndpointAddress(endpoint));
 
             try
             {
@@ -60,6 +61,35 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
             {
                 client.SafeClose();
             }
+        }
+
+        private static Uri ResolveEndpoint(string? endpoint)
+        {
+            var value = string.IsNullOrWhiteSpace(endpoint) ? DefaultEndpoint : endpoint.Trim();
+            var wsdlIndex = value.IndexOf("?wsdl", StringComparison.OrdinalIgnoreCase);
+            if (wsdlIndex >= 0)
+                value = value[..wsdlIndex];
+
+            return new Uri(value);
+        }
+
+        private static BasicHttpBinding CreateBinding(Uri endpoint)
+        {
+            var binding = new BasicHttpBinding
+            {
+                MaxBufferSize = int.MaxValue,
+                MaxReceivedMessageSize = int.MaxValue,
+                ReaderQuotas = System.Xml.XmlDictionaryReaderQuotas.Max,
+                AllowCookies = true,
+                Security =
+                {
+                    Mode = endpoint.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+                        ? BasicHttpSecurityMode.Transport
+                        : BasicHttpSecurityMode.None
+                }
+            };
+
+            return binding;
         }
 
         private BankStatementResult Parse(XmlElement xml, BankStatementRequest request, string customerNo)

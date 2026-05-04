@@ -40,9 +40,6 @@ namespace Finans.Infrastructure.Banking.DependencyInjection
                 "Emlak Katilim",
                 "Provider proxy/dokumani projede tamamlanmadigi icin otomatik import aktif degil."));
 
-            // Test/geliştirme provider'ı
-            services.AddScoped<IBankProvider, DummyBankProvider>();
-
             services.AddMemoryCache();
             services.AddHttpClient();
 
