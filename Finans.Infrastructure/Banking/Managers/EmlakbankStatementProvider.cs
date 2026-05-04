@@ -1,177 +1,246 @@
-//using Finans.Application.Abstractions.Banking;
-//using Finans.Application.Models.Banking;
-//using Finans.Infrastructure.Banking.Base;
-//using Finans.Infrastructure.Banking.Legacy;
-//using System.Globalization;
-//using Finans.Infrastructure.Banking.Managers.BankProviders.Infrastructure;
+using System.Globalization;
+using System.Net.Http.Headers;
+using System.Security;
+using System.Text;
+using System.Xml.Linq;
+using Finans.Application.Abstractions.Banking;
+using Finans.Application.Models.Banking;
+using Finans.Infrastructure.Banking.Base;
+using Finans.Infrastructure.Banking.Legacy;
 
-//using EmlakSrv; // svcutil ile üretilen namespace
+namespace Finans.Infrastructure.Banking.Managers.BankProviders
+{
+    public sealed class EmlakbankStatementProvider : IBankProvider
+    {
+        private const string DefaultEndpoint =
+            "https://boa.emlakbank.com.tr/BOA.Integration.WCFService/BOA.Integration.AccountStatement/AccountStatementService.svc/Basic";
 
-//namespace Finans.Infrastructure.Banking.Managers.BankProviders
-//{
-//    public sealed class EmlakbankStatementProvider : IBankProvider
-//    {
-//        public int BankId => BankIds.Emlakbank;
-//        public string BankCode => "EML";
-//        public string ProviderCode => "EmlakbankStatementProvider";
+        private readonly IHttpClientFactory _httpClientFactory;
 
-//        public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
-//        {
-//            // 1) Account parse (123456-1)
-//            var (accNo, accSuffix) = ParseAccount(request);
+        public EmlakbankStatementProvider(IHttpClientFactory httpClientFactory)
+        {
+            _httpClientFactory = httpClientFactory;
+        }
 
-//            // 2) WCF Request oluştur
-//            var wcfReq = new AccountStatetmentRequest
-//            {
-//                ExtUName = request.Username,
-//                ExtUPassword = request.Password,
+        public int BankId => BankIds.Emlakbank;
+        public string BankCode => "EML";
+        public string ProviderCode => "EmlakbankStatementProvider";
+        public IReadOnlyCollection<string> ProviderAliases { get; } = new[] { "EML", "EMLAK", "EMLAK_KATILIM" };
 
-//                AccountNumber = accNo,
-//                AccountSuffix = accSuffix,
+        public async Task<BankStatementResult> GetStatementAsync(BankStatementRequest request, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(request.Username))
+                throw new ArgumentException("Emlak Katilim icin Username zorunlu.");
+            if (string.IsNullOrWhiteSpace(request.Password))
+                throw new ArgumentException("Emlak Katilim icin Password zorunlu.");
 
-//                BeginDate = request.StartDate,
-//                EndDate = request.EndDate,
+            var endpoint = ResolveEndpoint(request.Link);
+            var requestXml = BuildSoapEnvelope(request.Username, request.Password, request.StartDate, request.EndDate);
 
-//                // Opsiyonel alanlar (bankadan zorunlu gelirse extras ile override edersin)
-//                AppName = request.GetExtra("appName") ?? "TurkSoft.BankService",
-//                DeviceId = request.GetExtra("deviceId") ?? Environment.MachineName,
-//                DeviceModel = request.GetExtra("deviceModel") ?? "Server",
-//                DeviceOSName = request.GetExtra("deviceOSName") ?? "Windows",
-//                DeviceOSVersion = request.GetExtra("deviceOSVersion") ?? Environment.OSVersion.VersionString,
-//                Version = request.GetExtra("version") ?? "1.0",
-//                MethodName = request.GetExtra("methodName") ?? "GetAccountStatement",
-//                MainResourceCode = request.GetExtra("mainResourceCode"),
-//            };
+            var http = _httpClientFactory.CreateClient(nameof(EmlakbankStatementProvider));
+            http.Timeout = TimeSpan.FromSeconds(45);
 
-//            if (int.TryParse(request.GetExtra("languageId"), out var langId))
-//                wcfReq.LanguageId = langId;
+            using var msg = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            msg.Headers.TryAddWithoutValidation(
+                "SOAPAction",
+                "\"http://boa.net/BOA.Integration.CoreBanking.Teller/Service/IAccountStatementService/GetAccountStatement\"");
+            msg.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/xml"));
+            msg.Content = new StringContent(requestXml, Encoding.UTF8, "text/xml");
 
-//            if (int.TryParse(request.GetExtra("mainResourceId"), out var mrid))
-//                wcfReq.MainResourceId = mrid;
+            using var resp = await http.SendAsync(msg, HttpCompletionOption.ResponseContentRead, ct).ConfigureAwait(false);
+            var responseText = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
-//            // 3) Client oluştur (Link ile override edilebilir)
-//            // DİKKAT: WSDL değil, servis endpoint (…/Basic) verilmelidir.
-//            // Default zaten proxy içinde: https://.../AccountStatementService.svc/Basic
-//            var endpoint = string.IsNullOrWhiteSpace(request.Link)
-//                ? null
-//                : request.Link;
+            if (!resp.IsSuccessStatusCode)
+                throw new InvalidOperationException($"Emlak Katilim servis HTTP {(int)resp.StatusCode}: {SafePreview(responseText)}");
 
-//            var client = endpoint is null
-//                ? new AccountStatementServiceClient(AccountStatementServiceClient.EndpointConfiguration.BasicHttpBinding_IAccountStatementService)
-//                : new AccountStatementServiceClient(AccountStatementServiceClient.EndpointConfiguration.BasicHttpBinding_IAccountStatementService, endpoint);
+            return Parse(responseText, request);
+        }
 
-//            try
-//            {
-//                var resp = await client.GetAccountStatementAsync(wcfReq);
+        private static Uri ResolveEndpoint(string? endpoint)
+        {
+            var value = string.IsNullOrWhiteSpace(endpoint) ? DefaultEndpoint : endpoint.Trim();
+            var wsdlIndex = value.IndexOf("?wsdl", StringComparison.OrdinalIgnoreCase);
+            if (wsdlIndex >= 0)
+                value = value[..wsdlIndex];
 
-//                if (resp == null)
-//                    throw new Exception("Emlakbank: Boş yanıt döndü.");
+            return new Uri(value);
+        }
 
-//                if (!resp.Success)
-//                {
-//                    var msg = resp.ErrorMessage ?? (resp.Results != null && resp.Results.Length > 0
-//                        ? string.Join(" | ", resp.Results.Select(r => $"{r.ErrorCode}:{r.ErrorMessage}"))
-//                        : "Bilinmeyen hata");
-//                    throw new Exception($"Emlakbank: Success=false. {msg}");
-//                }
+        private static string BuildSoapEnvelope(string userName, string password, DateTime startDate, DateTime endDate)
+        {
+            return $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<soapenv:Envelope xmlns:soapenv=""http://schemas.xmlsoap.org/soap/envelope/"" xmlns:ser=""http://boa.net/BOA.Integration.CoreBanking.Teller/Service"" xmlns:boa=""http://schemas.datacontract.org/2004/07/BOA.Integration.Base"" xmlns:boa1=""http://schemas.datacontract.org/2004/07/BOA.Integration.Model.CoreBanking.Teller"">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ser:GetAccountStatement>
+      <ser:request>
+        <boa:ExtUName>{XmlEscape(userName)}</boa:ExtUName>
+        <boa:ExtUPassword>{XmlEscape(password)}</boa:ExtUPassword>
+        <boa1:BeginDate>{startDate:yyyy-MM-dd}</boa1:BeginDate>
+        <boa1:EndDate>{endDate:yyyy-MM-dd}</boa1:EndDate>
+      </ser:request>
+    </ser:GetAccountStatement>
+  </soapenv:Body>
+</soapenv:Envelope>";
+        }
 
-//                if (!string.IsNullOrWhiteSpace(resp.ErrorCode))
-//                    throw new Exception($"Emlakbank: {resp.ErrorCode} - {resp.ErrorMessage}");
+        private static BankStatementResult Parse(string xml, BankStatementRequest request)
+        {
+            var doc = XDocument.Parse(xml);
+            var fault = doc.Descendants().FirstOrDefault(x => x.Name.LocalName.Equals("Fault", StringComparison.OrdinalIgnoreCase));
+            if (fault != null)
+            {
+                var faultText = GetDescendantValue(fault, "faultstring") ?? fault.Value;
+                throw new InvalidOperationException($"Emlak Katilim SOAP Fault: {SafePreview(faultText)}");
+            }
 
-//                // 4) Map -> LegacyBankRow
-//                var list = new List<LegacyBankRow>();
-//                var accounts = resp.Value ?? Array.Empty<AccountContract>();
+            var errorMessage = doc.Descendants()
+                .Where(x => x.Name.LocalName.Equals("ErrorMessage", StringComparison.OrdinalIgnoreCase))
+                .Select(x => x.Value?.Trim())
+                .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x));
 
-//                foreach (var acc in accounts)
-//                {
-//                    var details = acc.Details ?? Array.Empty<TransactionDetailContract>();
+            var hasAccount = doc.Descendants().Any(x => x.Name.LocalName.Equals("AccountContract", StringComparison.OrdinalIgnoreCase));
+            if (!hasAccount && !string.IsNullOrWhiteSpace(errorMessage))
+                return LegacyBankRowMapper.Fail(errorMessage!, xml);
 
-//                    foreach (var d in details)
-//                    {
-//                        // debit/credit kararını basit tuttum:
-//                        // Credit > 0 => Alacak (A), aksi => Borç (B)
-//                        var debOrCred = d.Credit > 0 ? "A" : "B";
+            var requested = ParseRequestedAccount(request.AccountNumber);
+            var customerNo = request.GetExtra("customerNo") ?? requested.accountNo;
+            var list = new List<LegacyBankRow>();
 
-//                        var processId = !string.IsNullOrWhiteSpace(d.TranRef)
-//                            ? d.TranRef
-//                            : (d.BusinessKey?.ToString(CultureInfo.InvariantCulture) ?? Guid.NewGuid().ToString("N"));
+            foreach (var account in doc.Descendants().Where(x => x.Name.LocalName.Equals("AccountContract", StringComparison.OrdinalIgnoreCase)))
+            {
+                var accountNo = GetChildValue(account, "AccountNumber");
+                var suffix = GetChildValue(account, "AccountSuffix");
 
-//                        list.Add(new LegacyBankRow
-//                        {
-//                            BNKCODE = BankCode,
-//                            HESAPNO = $"{acc.AccountNumber}-{acc.AccountSuffix}",
+                if (!MatchesRequestedAccount(accountNo, suffix, requested))
+                    continue;
 
-//                            URF = request.GetExtra("customerNo") ?? "", // bankanın müşteri no’su elinde varsa extras ile ver
-//                            SUBECODE = acc.BranchId.ToString(CultureInfo.InvariantCulture),
-//                            CURRENCYCODE = acc.FECName, // ya da acc.FEC / FECLongName; bankanın döndürdüğüne göre
+                foreach (var detail in account.Descendants().Where(x => x.Name.LocalName.Equals("TransactionDetailContract", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var amount = FirstNonEmpty(GetChildValue(detail, "Amount"), GetChildValue(detail, "Credit"), GetChildValue(detail, "Debit"), "0");
+                    var tranDate = ParseDate(GetChildValue(detail, "TranDate"));
+                    var valueDate = ParseDate(GetChildValue(detail, "ValueDate")) ?? tranDate;
+                    var processId = FirstNonEmpty(
+                        GetChildValue(detail, "TranRef"),
+                        GetChildValue(detail, "BusinessKey"),
+                        GetChildValue(detail, "TransactionId"),
+                        $"{accountNo}-{suffix}-{tranDate:O}-{amount}");
 
-//                            PROCESSID = processId,
-//                            PROCESSREFNO = d.TranRef ?? "",
-//                            PROCESSTIMESTR = d.TranDate.ToString("yyyy-MM-ddTHH:mm:ss"),
-//                            PROCESSTIMESTR2 = (d.ValueDate ?? d.TranDate).ToString("yyyy-MM-ddTHH:mm:ss"),
-//                            PROCESSTIME = d.TranDate,
-//                            PROCESSTIME2 = d.ValueDate ?? d.TranDate,
+                    list.Add(new LegacyBankRow
+                    {
+                        BNKCODE = "EML",
+                        HESAPNO = JoinAccount(accountNo, suffix),
+                        URF = customerNo,
+                        SUBECODE = GetChildValue(account, "BranchId"),
+                        CURRENCYCODE = FirstNonEmpty(GetChildValue(account, "FECName"), GetChildValue(account, "FECLongName")),
+                        PROCESSID = processId,
+                        PROCESSREFNO = FirstNonEmpty(GetChildValue(detail, "TranRef"), processId),
+                        PROCESSTIMESTR = GetChildValue(detail, "TranDate"),
+                        PROCESSTIMESTR2 = GetChildValue(detail, "ValueDate"),
+                        PROCESSTIME = tranDate,
+                        PROCESSTIME2 = valueDate,
+                        PROCESSAMAOUNT = amount,
+                        PROCESSBALANCE = GetChildValue(detail, "CurrentBalance"),
+                        PROCESSDESC = GetChildValue(detail, "Description") ?? string.Empty,
+                        PROCESSDESC2 = GetChildValue(detail, "TranType"),
+                        PROCESSDESC3 = GetChildValue(detail, "ResourceCode"),
+                        PROCESSIBAN = GetChildValue(account, "IBAN"),
+                        FRMIBAN = GetChildValue(detail, "SenderIBAN"),
+                        PROCESSVKN = GetChildValue(detail, "SenderIdentityNumber"),
+                        PROCESSDEBORCRED = MapDebitCredit(GetChildValue(detail, "Credit"), GetChildValue(detail, "Debit"), amount),
+                        PROCESSTYPECODE = GetChildValue(detail, "TranType"),
+                        Durum = 0
+                    });
+                }
+            }
 
-//                            PROCESSAMAOUNT = d.Amount.ToString(CultureInfo.InvariantCulture),
-//                            PROCESSBALANCE = d.CurrentBalance.ToString(CultureInfo.InvariantCulture),
+            return LegacyBankRowMapper.ToResult(list, xml);
+        }
 
-//                            PROCESSDESC = d.Description ?? "",
-//                            PROCESSDESC2 = d.TranType ?? "",
-//                            PROCESSDESC3 = d.ResourceCode ?? "",
+        private static (string? accountNo, string? suffix) ParseRequestedAccount(string? accountNumber)
+        {
+            if (string.IsNullOrWhiteSpace(accountNumber))
+                return (null, null);
 
-//                            PROCESSIBAN = acc.IBAN ?? "",
-//                            PROCESSDEBORCRED = debOrCred,
+            var raw = accountNumber.Trim();
+            var parts = raw.Split('-', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length >= 2 ? (parts[0], parts[1]) : (raw, null);
+        }
 
-//                            PROCESSTYPECODE = d.TranType ?? "",
-//                            PROCESSTYPECODEMT940 = null,
+        private static bool MatchesRequestedAccount(string? accountNo, string? suffix, (string? accountNo, string? suffix) requested)
+        {
+            if (string.IsNullOrWhiteSpace(requested.accountNo))
+                return true;
 
-//                            // karşı taraf (varsa)
-//                            FRMIBAN = d.SenderIBAN ?? "",
-//                            PROCESSVKN = d.SenderIdentityNumber ?? "",
+            if (!string.Equals(accountNo?.Trim(), requested.accountNo, StringComparison.OrdinalIgnoreCase))
+                return false;
 
-//                            Durum = 0
-//                        });
-//                    }
-//                }
+            return string.IsNullOrWhiteSpace(requested.suffix) ||
+                   string.Equals(suffix?.Trim(), requested.suffix, StringComparison.OrdinalIgnoreCase);
+        }
 
-//                return LegacyBankRowMapper.ToResult(list);
-//            }
-//            finally
-//            {
-//                client.SafeClose(); // senin extensionın
-//            }
-//        }
+        private static string JoinAccount(string? accountNo, string? suffix)
+            => string.IsNullOrWhiteSpace(suffix) ? accountNo ?? string.Empty : $"{accountNo}-{suffix}";
 
-//        private static (int accNo, short suffix) ParseAccount(BankStatementRequest request)
-//        {
-//            if (string.IsNullOrWhiteSpace(request.AccountNumber))
-//                throw new ArgumentException("Emlakbank için AccountNumber zorunlu.");
+        private static string? GetChildValue(XElement element, string localName)
+            => element.Elements()
+                .FirstOrDefault(x => x.Name.LocalName.Equals(localName, StringComparison.OrdinalIgnoreCase))
+                ?.Value
+                ?.Trim();
 
-//            var raw = request.AccountNumber.Trim();
+        private static string? GetDescendantValue(XElement element, string localName)
+            => element.Descendants()
+                .FirstOrDefault(x => x.Name.LocalName.Equals(localName, StringComparison.OrdinalIgnoreCase))
+                ?.Value
+                ?.Trim();
 
-//            // "123456-1"
-//            if (raw.Contains('-'))
-//            {
-//                var parts = raw.Split('-', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-//                if (parts.Length >= 1 && int.TryParse(parts[0], out var n))
-//                {
-//                    short sfx = 0;
-//                    if (parts.Length >= 2) short.TryParse(parts[1], out sfx);
-//                    return (n, sfx);
-//                }
-//            }
+        private static DateTime? ParseDate(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
 
-//            // sadece "123456"
-//            if (int.TryParse(raw, out var only))
-//            {
-//                // extras["suffix"] varsa onu kullan
-//                if (short.TryParse(request.GetExtra("suffix"), out var sfx))
-//                    return (only, sfx);
+            var formats = new[] { "yyyy-MM-dd", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-ddTHH:mm:ss.fff", "dd.MM.yyyy", "dd/MM/yyyy" };
+            if (DateTime.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal, out var parsed))
+                return parsed;
 
-//                return (only, 0);
-//            }
+            return DateTime.TryParse(value, CultureInfo.GetCultureInfo("tr-TR"), DateTimeStyles.AssumeLocal, out parsed)
+                ? parsed
+                : null;
+        }
 
-//            throw new ArgumentException($"Emlakbank AccountNumber formatı hatalı: '{request.AccountNumber}'. Örn: '123456-1'");
-//        }
-//    }
-//}
+        private static string MapDebitCredit(string? credit, string? debit, string? amount)
+        {
+            if (TryParseDecimal(credit) > 0)
+                return "A";
+            if (TryParseDecimal(debit) > 0)
+                return "B";
+
+            return (amount ?? string.Empty).TrimStart().StartsWith("-", StringComparison.Ordinal) ? "B" : "A";
+        }
+
+        private static decimal TryParseDecimal(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return 0m;
+
+            if (decimal.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+                return parsed;
+
+            return decimal.TryParse(value, NumberStyles.Any, CultureInfo.GetCultureInfo("tr-TR"), out parsed)
+                ? parsed
+                : 0m;
+        }
+
+        private static string? FirstNonEmpty(params string?[] values)
+            => values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim();
+
+        private static string XmlEscape(string? value)
+            => SecurityElement.Escape(value ?? string.Empty) ?? string.Empty;
+
+        private static string SafePreview(string? value)
+        {
+            value = (value ?? string.Empty).Trim();
+            return value.Length <= 600 ? value : value[..600];
+        }
+    }
+}

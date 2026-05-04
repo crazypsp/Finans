@@ -13,6 +13,8 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
     {
         private const string DefaultSoap11Endpoint =
             "http://fbmaestro.qnb.com.tr:9086/MaestroCoreEkstre/services/TeknikBaglantiService.TeknikBaglantiServiceHttpSoap11Endpoint/";
+        private const string DefaultHttpsEndpoint =
+            "https://fbmaestro.qnb.com.tr/MaestroCoreEkstre/services/TeknikBaglantiService.TeknikBaglantiServiceHttpSoap11Endpoint/";
 
         public int BankId => BankIds.QnbFinans;
         public string BankCode => "QNB";
@@ -35,7 +37,7 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
             if (string.IsNullOrWhiteSpace(request.AccountNumber))
                 throw new ArgumentException("QNB icin AccountNumber zorunlu.");
 
-            var endpoint = ResolveEndpoint(request.Link);
+            var endpoints = ResolveEndpoints(request.Link);
             var soapXml = BuildSoapEnvelope(
                 request.Username,
                 request.Password,
@@ -45,35 +47,62 @@ namespace Finans.Infrastructure.Banking.Managers.BankProviders
                 request.GetExtra("iban"));
 
             var http = _httpFactory.CreateClient(nameof(QnbMaestroStatementProvider));
-            http.Timeout = TimeSpan.FromSeconds(90);
+            http.Timeout = TimeSpan.FromSeconds(20);
 
-            using var msg = new HttpRequestMessage(HttpMethod.Post, endpoint);
-            msg.Headers.TryAddWithoutValidation("SOAPAction", "\"urn:getTransactionInfo\"");
-            msg.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/xml"));
-            msg.Content = new StringContent(soapXml, Encoding.UTF8, "text/xml");
+            var errors = new List<string>();
+            foreach (var endpoint in endpoints)
+            {
+                try
+                {
+                    using var msg = new HttpRequestMessage(HttpMethod.Post, endpoint);
+                    msg.Headers.TryAddWithoutValidation("SOAPAction", "\"urn:getTransactionInfo\"");
+                    msg.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/xml"));
+                    msg.Content = new StringContent(soapXml, Encoding.UTF8, "text/xml");
 
-            using var resp = await http.SendAsync(msg, ct).ConfigureAwait(false);
-            var respText = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                    using var resp = await http.SendAsync(msg, ct).ConfigureAwait(false);
+                    var respText = await resp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
-            if (!resp.IsSuccessStatusCode)
-                throw new Exception($"QNB servis HTTP {(int)resp.StatusCode}: {SafePreview(respText)}");
+                    if (!resp.IsSuccessStatusCode)
+                    {
+                        errors.Add($"{endpoint} => HTTP {(int)resp.StatusCode}: {SafePreview(respText)}");
+                        continue;
+                    }
 
-            return ParseResponseToRows(respText, request);
+                    return ParseResponseToRows(respText, request);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+                {
+                    errors.Add($"{endpoint} => {ex.Message}");
+                }
+            }
+
+            throw new Exception("QNB servislerine erisilemedi. " + string.Join(" | ", errors));
         }
 
-        private static string ResolveEndpoint(string? link)
+        private static IReadOnlyList<string> ResolveEndpoints(string? link)
         {
-            if (string.IsNullOrWhiteSpace(link))
-                return DefaultSoap11Endpoint;
+            var candidates = new List<string>();
 
-            var endpoint = link.Trim();
-            if (endpoint.Contains("?wsdl", StringComparison.OrdinalIgnoreCase) ||
-                endpoint.EndsWith("/TeknikBaglantiService", StringComparison.OrdinalIgnoreCase))
-                return DefaultSoap11Endpoint;
+            if (!string.IsNullOrWhiteSpace(link))
+            {
+                var endpoint = link.Trim();
+                var wsdlIndex = endpoint.IndexOf("?wsdl", StringComparison.OrdinalIgnoreCase);
+                if (wsdlIndex >= 0)
+                    endpoint = endpoint[..wsdlIndex];
 
-            return endpoint.EndsWith("/", StringComparison.Ordinal)
-                ? endpoint
-                : endpoint + "/";
+                if (endpoint.EndsWith("/TeknikBaglantiService", StringComparison.OrdinalIgnoreCase))
+                    candidates.Add(endpoint + ".TeknikBaglantiServiceHttpSoap11Endpoint/");
+
+                candidates.Add(endpoint.EndsWith("/", StringComparison.Ordinal) ? endpoint : endpoint + "/");
+            }
+
+            candidates.Add(DefaultHttpsEndpoint);
+            candidates.Add(DefaultSoap11Endpoint);
+
+            return candidates
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         private static string BuildSoapEnvelope(

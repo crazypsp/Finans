@@ -23,10 +23,8 @@ namespace Finans.Infrastructure.Banking.DependencyInjection
             services.AddScoped<IBankProvider, TurkiyeFinansStatementProvider>();
             services.AddScoped<IBankProvider, VakifKatilimStatementProvider>();
             services.AddScoped<IBankProvider, SekerbankStatementProvider>();
-            services.AddScoped<IBankProvider>(_ => new UnavailableBankProvider(
-                "ALB",
-                "Albaraka Turk",
-                "Provider proxy/dokumani projede tamamlanmadigi icin otomatik import aktif degil."));
+            services.AddScoped<IBankProvider, AlbarakaStatementProvider>();
+            services.AddScoped<IBankProvider, EmlakbankStatementProvider>();
             services.AddScoped<IBankProvider>(_ => new UnavailableBankProvider(
                 "ANB",
                 "Anadolubank",
@@ -35,10 +33,6 @@ namespace Finans.Infrastructure.Banking.DependencyInjection
                 "DEN",
                 "Denizbank",
                 "InterAPI sertifika/abonelik ve production endpoint dogrulamasi gerektirdigi icin otomatik import aktif degil."));
-            services.AddScoped<IBankProvider>(_ => new UnavailableBankProvider(
-                "EML",
-                "Emlak Katilim",
-                "Provider proxy/dokumani projede tamamlanmadigi icin otomatik import aktif degil."));
 
             services.AddMemoryCache();
             services.AddHttpClient();
